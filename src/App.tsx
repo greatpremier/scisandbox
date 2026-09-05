@@ -24,8 +24,10 @@ import {
   EnzymeKineticsState,
   BacterialGrowthState,
 } from "./utils/physicsEngine";
+import { useLabTheme } from "./context/ThemeContext";
 
 export default function App() {
+  const { isLight } = useLabTheme();
   const [currentDiscipline, setCurrentDiscipline] = useState<DisciplineType>("chemistry");
   const [currentExperimentId, setCurrentExperimentId] = useState<ExperimentId>("titration");
 
@@ -654,7 +656,11 @@ export default function App() {
   ]);
 
   return (
-    <div className="flex flex-col w-screen h-screen bg-slate-950 text-slate-100 overflow-hidden select-none font-sans">
+    <div
+      className={`flex flex-col w-screen h-screen ${
+        isLight ? "bg-slate-100 text-slate-800" : "bg-slate-950 text-slate-100"
+      } overflow-hidden select-none font-sans`}
+    >
       {/* 1. Global Navigation & Top Bar */}
       <NavigationHeader
         currentDiscipline={currentDiscipline}
@@ -684,7 +690,11 @@ export default function App() {
         />
 
         {/* Central 3D Interactive Lab Simulation Viewport */}
-        <main className="flex-1 relative h-full bg-slate-950 overflow-hidden">
+        <main
+          className={`flex-1 relative h-full ${
+            isLight ? "bg-slate-200/40" : "bg-slate-950"
+          } overflow-hidden`}
+        >
           {currentDiscipline === "chemistry" && (
             <ChemistrySimulation
               experimentId={currentExperimentId as "titration" | "reaction_kinetics"}
