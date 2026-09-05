@@ -1,0 +1,6 @@
+{
+  "name": "OmniLab - 3D Virtual Science Laboratory",
+  "description": "Interactive 3D virtual laboratory for chemistry, physics, and biology experiments with real-time data analysis, telemetry graphing, and AI experiment insights.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
