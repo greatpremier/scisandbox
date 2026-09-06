@@ -174,6 +174,19 @@ export const ThreeCanvasWrapper: React.FC<ThreeCanvasWrapperProps> = ({
       if (cleanupScene) cleanupScene();
       controls.dispose();
       renderer.dispose();
+      if (sceneRef.current) {
+        sceneRef.current.traverse((child) => {
+          if (child instanceof THREE.Mesh) {
+            child.geometry?.dispose();
+            if (Array.isArray(child.material)) {
+              child.material.forEach((m) => m.dispose());
+            } else if (child.material) {
+              child.material.dispose();
+            }
+          }
+        });
+        sceneRef.current.clear();
+      }
       if (container && renderer.domElement && container.contains(renderer.domElement)) {
         container.removeChild(renderer.domElement);
       }

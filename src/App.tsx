@@ -179,16 +179,16 @@ export default function App() {
   const handleSelectExperiment = (id: ExperimentId) => {
     setCurrentExperimentId(id);
     const exp = EXPERIMENTS_LIST.find((e) => e.id === id);
+    const newParams = exp?.presets[0]?.parameters ? { ...exp.presets[0].parameters } : {};
     if (exp) {
       setCurrentDiscipline(exp.discipline);
-      const newParams = { ...(exp.presets[0]?.parameters || {}) };
       setParameters(newParams);
     }
     setIsRunning(false);
     setSimulationTime(0);
     setDataPoints([]);
     setPastTrajectory([]);
-    resetExperimentState(id);
+    resetExperimentState(id, newParams);
   };
 
   // Parameter Change Handler
@@ -260,11 +260,31 @@ export default function App() {
     resetExperimentState(currentExperimentId);
   };
 
-  const resetExperimentState = (id: ExperimentId) => {
+  const resetExperimentState = (id: ExperimentId, explicitParams?: Record<string, any>) => {
+    const p = explicitParams || parameters;
     if (id === "titration") {
-      setTitrationState(calculateTitrationState("HCl", 0.1, 0.1, 25, 0, "phenolphthalein"));
+      setTitrationState(
+        calculateTitrationState(
+          p.acidType || "HCl",
+          p.acidConcentration || 0.1,
+          p.baseConcentration || 0.1,
+          p.initialVolume || 25,
+          0,
+          p.indicator || "phenolphthalein"
+        )
+      );
     } else if (id === "reaction_kinetics") {
-      setGasState(calculateGasKinetics(0, parameters.zincMass || 1.5, parameters.zincMorphology || "granules", 1.0, 40, 25, false));
+      setGasState(
+        calculateGasKinetics(
+          0,
+          p.zincMass || 1.5,
+          p.zincMorphology || "granules",
+          p.acidConcentration || 1.0,
+          p.acidVolume || 40,
+          p.temperature || 25,
+          false
+        )
+      );
     } else if (id === "projectile") {
       setProjectileState({
         x: 0,
@@ -279,30 +299,60 @@ export default function App() {
         totalEnergy: 0,
         timeElapsed: 0,
         isGrounded: true,
-        distanceToTarget: parameters.targetDistance || 75,
+        distanceToTarget: p.targetDistance || 75,
         hitTarget: false,
       });
+    } else if (id === "optics_prism") {
+      const rays = calculatePrismDispersion(
+        p.incidentAngle ?? 45,
+        60,
+        p.prismMaterial ?? "flint_glass",
+        p.lightMode ?? "white",
+        p.wavelength ?? 532
+      );
+      setPrismRays(rays);
+    } else if (id === "enzyme_kinetics") {
+      setEnzymeState(
+        calculateEnzymeKinetics(
+          p.substrateConcentration ?? 15,
+          p.enzymeConcentration ?? 2.0,
+          p.temperature ?? 37,
+          p.pH ?? 7.0,
+          p.inhibitorType ?? "none",
+          p.inhibitorConcentration ?? 5.0,
+          0
+        )
+      );
     } else if (id === "bacterial_growth") {
-      setBacterialState(calculateBacterialDynamics(0, 1000, 100, 37, "none", 20));
+      setBacterialState(
+        calculateBacterialDynamics(
+          0,
+          1000,
+          100,
+          p.temperature ?? 37,
+          p.antibioticType ?? "none",
+          p.antibioticDose ?? 20
+        )
+      );
     } else if (id === "spectrophotometry") {
-      const solute = normalizeSolute(parameters.solute);
+      const solute = normalizeSolute(p.solute);
       setSpectroState(
         calculateSpectrophotometry(
           solute,
-          parameters.concentration ?? (solute === "KMnO4" ? 0.001 : 0.15),
-          parameters.pathLength ?? 1.0,
-          parameters.wavelength ?? 635
+          p.concentration ?? (solute === "KMnO4" ? 0.001 : 0.15),
+          p.pathLength ?? 1.0,
+          p.wavelength ?? 635
         )
       );
     } else if (id === "pendulum_harmonic") {
-      setPendulumState(createInitialPendulumState(parameters));
+      setPendulumState(createInitialPendulumState(p));
     } else if (id === "photosynthesis") {
       setPhotosynthesisState(
         calculatePhotosynthesis(
-          parameters.lightIntensity ?? 600,
-          parameters.lightColor ?? "white",
-          parameters.co2DonorConc ?? parameters.bicarbonateConc ?? 15,
-          parameters.temperature ?? 24,
+          p.lightIntensity ?? 600,
+          p.lightColor ?? "white",
+          p.co2DonorConc ?? p.bicarbonateConc ?? 15,
+          p.temperature ?? 24,
           7.5,
           0.05
         )
@@ -974,6 +1024,7 @@ export default function App() {
         >
           {currentDiscipline === "chemistry" && (
             <ChemistrySimulation
+              key={currentExperimentId}
               experimentId={currentExperimentId as "titration" | "reaction_kinetics" | "spectrophotometry"}
               titrationState={titrationState}
               gasState={gasState}
@@ -986,6 +1037,7 @@ export default function App() {
 
           {currentDiscipline === "physics" && (
             <PhysicsSimulation
+              key={currentExperimentId}
               experimentId={currentExperimentId as "projectile" | "optics_prism" | "pendulum_harmonic"}
               projectileState={projectileState}
               pastTrajectory={pastTrajectory}
@@ -1000,6 +1052,7 @@ export default function App() {
 
           {currentDiscipline === "biology" && (
             <BiologySimulation
+              key={currentExperimentId}
               experimentId={currentExperimentId as "enzyme_kinetics" | "bacterial_growth" | "photosynthesis"}
               enzymeState={enzymeState}
               bacterialState={bacterialState}

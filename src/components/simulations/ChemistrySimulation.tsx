@@ -643,6 +643,7 @@ export const ChemistrySimulation: React.FC<ChemistrySimulationProps> = ({
   return (
     <div className="relative w-full h-full">
       <ThreeCanvasWrapper
+        key={experimentId}
         onSceneReady={handleSceneReady}
         cameraPosition={
           experimentId === "titration"

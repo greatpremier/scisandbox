@@ -522,6 +522,7 @@ export const BiologySimulation: React.FC<BiologySimulationProps> = ({
   return (
     <div className="relative w-full h-full">
       <ThreeCanvasWrapper
+        key={experimentId}
         onSceneReady={handleSceneReady}
         cameraPosition={
           experimentId === "enzyme_kinetics"
