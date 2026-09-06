@@ -149,7 +149,8 @@ export const LabControlsPanel: React.FC<LabControlsPanelProps> = ({
         {(experimentId === "reaction_kinetics" ||
           experimentId === "optics_prism" ||
           experimentId === "enzyme_kinetics" ||
-          experimentId === "bacterial_growth") && (
+          experimentId === "bacterial_growth" ||
+          experimentId === "photosynthesis") && (
           <button
             onClick={onToggleRun}
             className={`w-full py-2.5 px-4 rounded-xl font-medium text-xs flex items-center justify-center gap-2 transition-all shadow-sm active:scale-[0.98] ${
@@ -170,6 +171,47 @@ export const LabControlsPanel: React.FC<LabControlsPanelProps> = ({
               </>
             )}
           </button>
+        )}
+
+        {experimentId === "pendulum_harmonic" && (
+          <button
+            onClick={onToggleRun}
+            className={`w-full py-2.5 px-4 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all shadow-sm active:scale-[0.98] ${
+              isRunning
+                ? "bg-amber-500 hover:bg-amber-600 text-slate-950"
+                : isLight
+                ? "bg-indigo-600 hover:bg-indigo-700 text-white"
+                : "bg-cyan-500 hover:bg-cyan-600 text-slate-950"
+            }`}
+          >
+            {isRunning ? (
+              <>
+                <Pause className="w-4 h-4" /> Pause Oscillation
+              </>
+            ) : (
+              <>
+                <Play className="w-4 h-4" /> Release & Swing Pendulum
+              </>
+            )}
+          </button>
+        )}
+
+        {experimentId === "spectrophotometry" && (
+          <div className="flex flex-col gap-2">
+            <button
+              onClick={() => {
+                // Zero / blank calibration
+                onParamChange("isZeroed", true);
+              }}
+              className={`w-full py-2 px-3 rounded-xl font-medium text-xs flex items-center justify-center gap-2 transition-all border ${
+                isLight
+                  ? "bg-white hover:bg-slate-100 text-blue-700 border-slate-300 shadow-xs"
+                  : "bg-slate-800 hover:bg-slate-700 text-cyan-300 border-slate-700"
+              }`}
+            >
+              <Sparkles className="w-3.5 h-3.5" /> Calibrate Blank Cell (Zero A = 0.000)
+            </button>
+          </div>
         )}
       </div>
 
@@ -870,6 +912,362 @@ export const LabControlsPanel: React.FC<LabControlsPanelProps> = ({
                 checked={!!parameters.gfpFluorescence}
                 onChange={(e) => onParamChange("gfpFluorescence", e.target.checked)}
                 className={`w-4 h-4 rounded cursor-pointer ${isLight ? "accent-emerald-600" : "accent-emerald-400"}`}
+              />
+            </div>
+          </>
+        )}
+
+        {/* ================= SPECTROPHOTOMETRY CONTROLS ================= */}
+        {experimentId === "spectrophotometry" && (
+          <>
+            <div className="space-y-1.5">
+              <label className={`block font-medium ${isLight ? "text-slate-600" : "text-slate-400"}`}>
+                Chemical Solute Specimen
+              </label>
+              <select
+                value={parameters.solute || "copper_sulfate"}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  onParamChange("solute", val);
+                  // Set sensible defaults for concentration and peak wavelength
+                  if (val === "copper_sulfate") {
+                    onParamChange("concentration", 0.15);
+                    onParamChange("wavelength", 635);
+                  } else if (val === "potassium_permanganate") {
+                    onParamChange("concentration", 0.0006);
+                    onParamChange("wavelength", 525);
+                  } else if (val === "tartrazine") {
+                    onParamChange("concentration", 0.0001);
+                    onParamChange("wavelength", 425);
+                  } else if (val === "nickel_chloride") {
+                    onParamChange("concentration", 0.25);
+                    onParamChange("wavelength", 395);
+                  }
+                }}
+                className={`w-full rounded-lg px-2.5 py-1.5 text-xs font-mono focus:outline-none transition-colors ${
+                  isLight
+                    ? "bg-white border border-slate-300 text-slate-800 shadow-xs focus:border-blue-500"
+                    : "bg-slate-800/90 border border-slate-700 text-white focus:border-cyan-500"
+                }`}
+              >
+                <option value="copper_sulfate">Copper(II) Sulfate [CuSO₄] (λmax = 635 nm)</option>
+                <option value="potassium_permanganate">Potassium Permanganate [KMnO₄] (λmax = 525 nm)</option>
+                <option value="tartrazine">Tartrazine / Yellow 5 (λmax = 425 nm)</option>
+                <option value="nickel_chloride">Nickel(II) Chloride [NiCl₂] (λmax = 395 / 720 nm)</option>
+              </select>
+            </div>
+
+            <div className="space-y-1.5">
+              <div className="flex justify-between items-center">
+                <span className={isLight ? "text-slate-600 font-medium" : "text-slate-300"}>Solute Concentration</span>
+                <span
+                  className={`font-mono text-xs font-semibold px-2 py-0.5 rounded ${
+                    isLight ? "bg-blue-50 text-blue-700 border border-blue-200/80" : "bg-slate-900 text-cyan-400 border border-slate-700"
+                  }`}
+                >
+                  {parameters.concentration < 0.01
+                    ? `${(parameters.concentration * 1000).toFixed(2)} mM`
+                    : `${parameters.concentration} M`}
+                </span>
+              </div>
+              <input
+                type="range"
+                min={
+                  parameters.solute === "potassium_permanganate"
+                    ? 0.0001
+                    : parameters.solute === "tartrazine"
+                    ? 0.00002
+                    : 0.01
+                }
+                max={
+                  parameters.solute === "potassium_permanganate"
+                    ? 0.002
+                    : parameters.solute === "tartrazine"
+                    ? 0.0003
+                    : 0.8
+                }
+                step={
+                  parameters.solute === "potassium_permanganate"
+                    ? 0.00005
+                    : parameters.solute === "tartrazine"
+                    ? 0.00001
+                    : 0.01
+                }
+                value={parameters.concentration || 0.15}
+                onChange={(e) => onParamChange("concentration", parseFloat(e.target.value))}
+                className={`w-full cursor-pointer ${isLight ? "accent-blue-600" : "accent-cyan-400"}`}
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <div className="flex justify-between items-center">
+                <span className={isLight ? "text-slate-600 font-medium" : "text-slate-300"}>Cuvette Path Length</span>
+                <span
+                  className={`font-mono text-xs font-semibold px-2 py-0.5 rounded ${
+                    isLight ? "bg-blue-50 text-blue-700 border border-blue-200/80" : "bg-slate-900 text-cyan-400 border border-slate-700"
+                  }`}
+                >
+                  {parameters.pathLength || 1.0} cm
+                </span>
+              </div>
+              <div className="grid grid-cols-3 gap-1.5">
+                {[0.5, 1.0, 2.0].map((len) => (
+                  <button
+                    key={len}
+                    type="button"
+                    onClick={() => onParamChange("pathLength", len)}
+                    className={`py-1.5 px-2 rounded-lg font-mono font-medium border text-center transition-all ${
+                      (parameters.pathLength || 1.0) === len
+                        ? isLight
+                          ? "bg-blue-50 text-blue-700 border-blue-400 font-bold"
+                          : "bg-cyan-500/20 text-cyan-300 border-cyan-500 font-bold"
+                        : isLight
+                        ? "bg-white text-slate-700 border-slate-200"
+                        : "bg-slate-800 text-slate-300 border-slate-700"
+                    }`}
+                  >
+                    {len.toFixed(1)} cm
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <div className="flex justify-between items-center">
+                <span className={isLight ? "text-slate-600 font-medium" : "text-slate-300"}>Wavelength (λ)</span>
+                <span
+                  className={`font-mono text-xs font-semibold px-2 py-0.5 rounded ${
+                    isLight ? "bg-blue-50 text-blue-700 border border-blue-200/80" : "bg-slate-900 text-cyan-400 border border-slate-700"
+                  }`}
+                >
+                  {parameters.wavelength || 635} nm
+                </span>
+              </div>
+              <input
+                type="range"
+                min="380"
+                max="750"
+                step="5"
+                value={parameters.wavelength || 635}
+                onChange={(e) => onParamChange("wavelength", parseInt(e.target.value))}
+                className="w-full cursor-pointer"
+                style={{
+                  accentColor:
+                    (parameters.wavelength || 635) < 450
+                      ? "#8b5cf6"
+                      : (parameters.wavelength || 635) < 490
+                      ? "#3b82f6"
+                      : (parameters.wavelength || 635) < 560
+                      ? "#22c55e"
+                      : (parameters.wavelength || 635) < 600
+                      ? "#eab308"
+                      : "#ef4444",
+                }}
+              />
+            </div>
+          </>
+        )}
+
+        {/* ================= PENDULUM HARMONIC CONTROLS ================= */}
+        {experimentId === "pendulum_harmonic" && (
+          <>
+            <div className="space-y-1.5">
+              <div className="flex justify-between items-center">
+                <span className={isLight ? "text-slate-600 font-medium" : "text-slate-300"}>String Length (L)</span>
+                <span
+                  className={`font-mono text-xs font-semibold px-2 py-0.5 rounded ${
+                    isLight ? "bg-blue-50 text-blue-700 border border-blue-200/80" : "bg-slate-900 text-cyan-400 border border-slate-700"
+                  }`}
+                >
+                  {(parameters.length || 1.0).toFixed(2)} m
+                </span>
+              </div>
+              <input
+                type="range"
+                min="0.2"
+                max="2.5"
+                step="0.05"
+                value={parameters.length || 1.0}
+                onChange={(e) => onParamChange("length", parseFloat(e.target.value))}
+                className={`w-full cursor-pointer ${isLight ? "accent-indigo-600" : "accent-cyan-400"}`}
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <div className="flex justify-between items-center">
+                <span className={isLight ? "text-slate-600 font-medium" : "text-slate-300"}>Bob Mass (m)</span>
+                <span
+                  className={`font-mono text-xs font-semibold px-2 py-0.5 rounded ${
+                    isLight ? "bg-blue-50 text-blue-700 border border-blue-200/80" : "bg-slate-900 text-cyan-400 border border-slate-700"
+                  }`}
+                >
+                  {(parameters.mass || 1.0).toFixed(1)} kg
+                </span>
+              </div>
+              <input
+                type="range"
+                min="0.1"
+                max="5.0"
+                step="0.1"
+                value={parameters.mass || 1.0}
+                onChange={(e) => onParamChange("mass", parseFloat(e.target.value))}
+                className={`w-full cursor-pointer ${isLight ? "accent-indigo-600" : "accent-cyan-400"}`}
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <div className="flex justify-between items-center">
+                <span className={isLight ? "text-slate-600 font-medium" : "text-slate-300"}>Initial Release Angle (θ₀)</span>
+                <span
+                  className={`font-mono text-xs font-semibold px-2 py-0.5 rounded ${
+                    isLight ? "bg-blue-50 text-blue-700 border border-blue-200/80" : "bg-slate-900 text-cyan-400 border border-slate-700"
+                  }`}
+                >
+                  {parameters.initialAngle || 30}°
+                </span>
+              </div>
+              <input
+                type="range"
+                min="-85"
+                max="85"
+                step="1"
+                value={parameters.initialAngle || 30}
+                onChange={(e) => onParamChange("initialAngle", parseInt(e.target.value))}
+                className={`w-full cursor-pointer ${isLight ? "accent-indigo-600" : "accent-cyan-400"}`}
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <div className="flex justify-between items-center">
+                <span className={isLight ? "text-slate-600 font-medium" : "text-slate-300"}>Air Viscous Damping (γ)</span>
+                <span
+                  className={`font-mono text-xs font-semibold px-2 py-0.5 rounded ${
+                    isLight ? "bg-blue-50 text-blue-700 border border-blue-200/80" : "bg-slate-900 text-cyan-400 border border-slate-700"
+                  }`}
+                >
+                  {(parameters.dampingCoeff ?? 0.05).toFixed(2)} s⁻¹
+                </span>
+              </div>
+              <input
+                type="range"
+                min="0"
+                max="0.4"
+                step="0.01"
+                value={parameters.dampingCoeff ?? 0.05}
+                onChange={(e) => onParamChange("dampingCoeff", parseFloat(e.target.value))}
+                className={`w-full cursor-pointer ${isLight ? "accent-indigo-600" : "accent-cyan-400"}`}
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <label className={`block font-medium ${isLight ? "text-slate-600" : "text-slate-400"}`}>
+                Celestial Gravity (g)
+              </label>
+              <select
+                value={parameters.gravity || 9.81}
+                onChange={(e) => onParamChange("gravity", parseFloat(e.target.value))}
+                className={`w-full rounded-lg px-2.5 py-1.5 text-xs font-mono focus:outline-none transition-colors ${
+                  isLight
+                    ? "bg-white border border-slate-300 text-slate-800 shadow-xs focus:border-indigo-500"
+                    : "bg-slate-800/90 border border-slate-700 text-white focus:border-cyan-500"
+                }`}
+              >
+                <option value="9.81">Earth (1.0 g = 9.81 m/s²)</option>
+                <option value="1.62">Moon (0.166 g = 1.62 m/s²)</option>
+                <option value="3.71">Mars (0.378 g = 3.71 m/s²)</option>
+                <option value="24.79">Jupiter (2.53 g = 24.79 m/s²)</option>
+                <option value="0.5">Microgravity (0.50 m/s²)</option>
+              </select>
+            </div>
+          </>
+        )}
+
+        {/* ================= PHOTOSYNTHESIS CONTROLS ================= */}
+        {experimentId === "photosynthesis" && (
+          <>
+            <div className="space-y-1.5">
+              <div className="flex justify-between items-center">
+                <span className={isLight ? "text-slate-600 font-medium" : "text-slate-300"}>Light Intensity</span>
+                <span
+                  className={`font-mono text-xs font-semibold px-2 py-0.5 rounded ${
+                    isLight ? "bg-emerald-50 text-emerald-700 border border-emerald-200/80" : "bg-slate-900 text-cyan-400 border border-slate-700"
+                  }`}
+                >
+                  {parameters.lightIntensity || 600} μmol/m²·s
+                </span>
+              </div>
+              <input
+                type="range"
+                min="0"
+                max="2000"
+                step="50"
+                value={parameters.lightIntensity || 600}
+                onChange={(e) => onParamChange("lightIntensity", parseInt(e.target.value))}
+                className={`w-full cursor-pointer ${isLight ? "accent-emerald-600" : "accent-cyan-400"}`}
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <label className={`block font-medium ${isLight ? "text-slate-600" : "text-slate-400"}`}>
+                Optical Filter Spectrum
+              </label>
+              <select
+                value={parameters.lightColor || "white"}
+                onChange={(e) => onParamChange("lightColor", e.target.value)}
+                className={`w-full rounded-lg px-2.5 py-1.5 text-xs font-mono focus:outline-none transition-colors ${
+                  isLight
+                    ? "bg-white border border-slate-300 text-slate-800 shadow-xs focus:border-emerald-500"
+                    : "bg-slate-800/90 border border-slate-700 text-white focus:border-cyan-500"
+                }`}
+              >
+                <option value="white">Full Sunlight White (PAR 400-700nm)</option>
+                <option value="blue">Blue Light Filter (450nm - Chl a/b peak)</option>
+                <option value="red">Red Light Filter (660nm - Photosystem II peak)</option>
+                <option value="green">Green Light Filter (520nm - Minimum Action)</option>
+              </select>
+            </div>
+
+            <div className="space-y-1.5">
+              <div className="flex justify-between items-center">
+                <span className={isLight ? "text-slate-600 font-medium" : "text-slate-300"}>NaHCO₃ (CO₂ Donor)</span>
+                <span
+                  className={`font-mono text-xs font-semibold px-2 py-0.5 rounded ${
+                    isLight ? "bg-emerald-50 text-emerald-700 border border-emerald-200/80" : "bg-slate-900 text-cyan-400 border border-slate-700"
+                  }`}
+                >
+                  {parameters.co2DonorConc || 15} mM
+                </span>
+              </div>
+              <input
+                type="range"
+                min="0"
+                max="50"
+                step="1"
+                value={parameters.co2DonorConc || 15}
+                onChange={(e) => onParamChange("co2DonorConc", parseInt(e.target.value))}
+                className={`w-full cursor-pointer ${isLight ? "accent-emerald-600" : "accent-cyan-400"}`}
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <div className="flex justify-between items-center">
+                <span className={isLight ? "text-slate-600 font-medium" : "text-slate-300"}>Water Bath Temp</span>
+                <span
+                  className={`font-mono text-xs font-semibold px-2 py-0.5 rounded ${
+                    isLight ? "bg-emerald-50 text-emerald-700 border border-emerald-200/80" : "bg-slate-900 text-cyan-400 border border-slate-700"
+                  }`}
+                >
+                  {parameters.temperature || 24}°C
+                </span>
+              </div>
+              <input
+                type="range"
+                min="10"
+                max="45"
+                step="1"
+                value={parameters.temperature || 24}
+                onChange={(e) => onParamChange("temperature", parseInt(e.target.value))}
+                className={`w-full cursor-pointer ${isLight ? "accent-emerald-600" : "accent-cyan-400"}`}
               />
             </div>
           </>

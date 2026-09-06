@@ -1,8 +1,8 @@
 export type DisciplineType = "chemistry" | "physics" | "biology";
 
-export type ChemistryExperimentId = "titration" | "reaction_kinetics";
-export type PhysicsExperimentId = "projectile" | "optics_prism";
-export type BiologyExperimentId = "enzyme_kinetics" | "bacterial_growth";
+export type ChemistryExperimentId = "titration" | "reaction_kinetics" | "spectrophotometry";
+export type PhysicsExperimentId = "projectile" | "optics_prism" | "pendulum_harmonic";
+export type BiologyExperimentId = "enzyme_kinetics" | "bacterial_growth" | "photosynthesis";
 
 export type ExperimentId = ChemistryExperimentId | PhysicsExperimentId | BiologyExperimentId;
 
@@ -36,13 +36,15 @@ export interface ExperimentMeta {
   discipline: DisciplineType;
   title: string;
   subtitle: string;
-  iconName: string;
+  iconName?: string;
   description: string;
-  learningObjectives: string[];
+  learningObjectives?: string[];
+  objectives?: string[];
   principles: string[];
   presets: ExperimentPreset[];
   parameters?: ExperimentParameterDef[];
   equations?: ExperimentEquation[];
+  apparatus?: string[];
 }
 
 // Data point recorded in time

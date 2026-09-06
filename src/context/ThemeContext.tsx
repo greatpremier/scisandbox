@@ -10,17 +10,17 @@ interface ThemeContextType {
 }
 
 const ThemeContext = createContext<ThemeContextType>({
-  theme: "light",
+  theme: "dark",
   toggleTheme: () => {},
   setTheme: () => {},
-  isLight: true,
+  isLight: false,
 });
 
 export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  // Default to optically friendly "light" modern laboratory aesthetic
+  // Default to dark mode as requested, with persistence support
   const [theme, setThemeState] = useState<LabTheme>(() => {
     const saved = localStorage.getItem("omnilab_theme");
-    return (saved === "dark" || saved === "light") ? saved : "light";
+    return (saved === "dark" || saved === "light") ? saved : "dark";
   });
 
   const setTheme = (newTheme: LabTheme) => {

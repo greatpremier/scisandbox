@@ -1,32 +1,44 @@
 import React, { useRef, useEffect } from "react";
 import * as THREE from "three";
 import { ThreeCanvasWrapper } from "./ThreeCanvasWrapper";
-import { EnzymeKineticsState, BacterialGrowthState } from "../../utils/physicsEngine";
+import { EnzymeKineticsState, BacterialGrowthState, PhotosynthesisState } from "../../utils/physicsEngine";
 
 interface BiologySimulationProps {
-  experimentId: "enzyme_kinetics" | "bacterial_growth";
+  experimentId: "enzyme_kinetics" | "bacterial_growth" | "photosynthesis";
   enzymeState?: EnzymeKineticsState;
   bacterialState?: BacterialGrowthState;
+  photosynthesisState?: PhotosynthesisState;
   substrateConc?: number;
   inhibitorType?: string;
   antibioticDose?: number;
   gfpFluorescence?: boolean;
+  lightColor?: "white" | "blue" | "red" | "green";
+  lightIntensity?: number;
 }
 
 export const BiologySimulation: React.FC<BiologySimulationProps> = ({
   experimentId,
   enzymeState,
   bacterialState,
+  photosynthesisState,
   substrateConc = 15,
   inhibitorType = "none",
   antibioticDose = 20,
   gfpFluorescence = false,
+  lightColor = "white",
+  lightIntensity = 500,
 }) => {
   const enzymeGroupRef = useRef<THREE.Group | null>(null);
   const substrateGroupRef = useRef<THREE.Group | null>(null);
   const bacteriaGroupRef = useRef<THREE.Group | null>(null);
   const zoneMeshRef = useRef<THREE.Mesh | null>(null);
   const cuvetteLiquidRef = useRef<THREE.Mesh | null>(null);
+
+  // Photosynthesis Refs
+  const photoBubblesRef = useRef<THREE.Points | null>(null);
+  const photoBubblePosRef = useRef<Float32Array | null>(null);
+  const lampLightRef = useRef<THREE.SpotLight | null>(null);
+  const lampBeamMeshRef = useRef<THREE.Mesh | null>(null);
 
   // Update cuvette absorbance color and enzyme pocket glow
   useEffect(() => {
@@ -71,6 +83,27 @@ export const BiologySimulation: React.FC<BiologySimulationProps> = ({
       }
     }
   }, [bacterialState, gfpFluorescence, experimentId]);
+
+  // Update Photosynthesis Lamp Color and Beam
+  useEffect(() => {
+    if (experimentId === "photosynthesis") {
+      let colorHex = 0xffffff;
+      if (lightColor === "blue") colorHex = 0x3b82f6;
+      else if (lightColor === "red") colorHex = 0xef4444;
+      else if (lightColor === "green") colorHex = 0x22c55e;
+
+      if (lampLightRef.current) {
+        lampLightRef.current.color.setHex(colorHex);
+        lampLightRef.current.intensity = Math.max(0.2, (lightIntensity / 1000) * 4.0);
+      }
+
+      if (lampBeamMeshRef.current) {
+        const mat = lampBeamMeshRef.current.material as THREE.MeshBasicMaterial;
+        mat.color.setHex(colorHex);
+        mat.opacity = Math.max(0.04, Math.min(0.4, (lightIntensity / 1000) * 0.35));
+      }
+    }
+  }, [lightColor, lightIntensity, experimentId]);
 
   const handleSceneReady = (scene: THREE.Scene) => {
     if (experimentId === "enzyme_kinetics") {
@@ -200,7 +233,7 @@ export const BiologySimulation: React.FC<BiologySimulationProps> = ({
       cuvetteLiquidRef.current = liquidMesh;
 
       scene.add(cuvetteGroup);
-    } else {
+    } else if (experimentId === "bacterial_growth") {
       // ==================== 3D BACTERIAL CULTURE & PETRI DISH ====================
       // A. Stereomicroscope Base Stage
       const stageGeo = new THREE.CylinderGeometry(4.8, 5.0, 0.35, 48);
@@ -290,9 +323,165 @@ export const BiologySimulation: React.FC<BiologySimulationProps> = ({
       bacteriaGroupRef.current = bacteriaGroup;
 
       scene.add(dishGroup);
+    } else if (experimentId === "photosynthesis") {
+      // ==================== PHOTOSYNTHESIS WATER APPARATUS ====================
+      const photoGroup = new THREE.Group();
+
+      // Tabletop
+      const benchGeo = new THREE.BoxGeometry(10, 0.3, 7);
+      const benchMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.4 });
+      const bench = new THREE.Mesh(benchGeo, benchMat);
+      bench.position.set(0, -0.15, 0);
+      photoGroup.add(bench);
+
+      // Glass Beaker
+      const beakerGeo = new THREE.CylinderGeometry(1.4, 1.4, 3.2, 32, 1, true);
+      const glassMat = new THREE.MeshPhysicalMaterial({
+        color: 0xffffff,
+        transmission: 0.94,
+        roughness: 0.05,
+        ior: 1.5,
+        transparent: true,
+        opacity: 0.35,
+      });
+      const beaker = new THREE.Mesh(beakerGeo, glassMat);
+      beaker.position.set(0, 1.6, 0);
+      photoGroup.add(beaker);
+
+      // Beaker bottom plate
+      const bottomGeo = new THREE.CylinderGeometry(1.4, 1.4, 0.1, 32);
+      const bottom = new THREE.Mesh(bottomGeo, glassMat);
+      bottom.position.set(0, 0.05, 0);
+      photoGroup.add(bottom);
+
+      // Water Liquid inside beaker
+      const waterGeo = new THREE.CylinderGeometry(1.36, 1.36, 2.9, 32);
+      const waterMat = new THREE.MeshPhysicalMaterial({
+        color: 0x38bdf8,
+        transmission: 0.88,
+        roughness: 0.1,
+        transparent: true,
+        opacity: 0.35,
+      });
+      const water = new THREE.Mesh(waterGeo, waterMat);
+      water.position.set(0, 1.45, 0);
+      photoGroup.add(water);
+
+      // Submerged Aquatic Plant (Elodea sprig)
+      const plantGroup = new THREE.Group();
+      // Main central stem
+      const stemGeo = new THREE.CylinderGeometry(0.04, 0.04, 1.8, 16);
+      const stemMat = new THREE.MeshStandardMaterial({ color: 0x15803d, roughness: 0.6 });
+      const stem = new THREE.Mesh(stemGeo, stemMat);
+      stem.position.set(0, 1.0, 0);
+      plantGroup.add(stem);
+
+      // Whorls of dark green leaves
+      const leafGeo = new THREE.ConeGeometry(0.18, 0.5, 5);
+      const leafMat = new THREE.MeshStandardMaterial({ color: 0x16a34a, roughness: 0.5 });
+      for (let h = 0.3; h <= 1.7; h += 0.28) {
+        for (let a = 0; a < 4; a++) {
+          const leaf = new THREE.Mesh(leafGeo, leafMat);
+          const ang = (a * Math.PI) / 2 + h * 1.5;
+          leaf.position.set(Math.cos(ang) * 0.22, h, Math.sin(ang) * 0.22);
+          leaf.rotation.z = Math.cos(ang) * 0.7;
+          leaf.rotation.x = -Math.sin(ang) * 0.7;
+          plantGroup.add(leaf);
+        }
+      }
+      photoGroup.add(plantGroup);
+
+      // Inverted Glass Funnel (covering the plant)
+      const coneGeo = new THREE.ConeGeometry(1.2, 1.1, 24, 1, true);
+      const funnelCone = new THREE.Mesh(coneGeo, glassMat);
+      funnelCone.rotation.x = Math.PI;
+      funnelCone.position.set(0, 1.1, 0);
+      photoGroup.add(funnelCone);
+
+      // Funnel Stem (pointing up)
+      const fStemGeo = new THREE.CylinderGeometry(0.1, 0.1, 1.2, 16, 1, true);
+      const fStem = new THREE.Mesh(fStemGeo, glassMat);
+      fStem.position.set(0, 2.1, 0);
+      photoGroup.add(fStem);
+
+      // Inverted Test Tube Collecting Gas
+      const tubeGeo = new THREE.CylinderGeometry(0.22, 0.22, 1.6, 20, 1, true);
+      const tube = new THREE.Mesh(tubeGeo, glassMat);
+      tube.position.set(0, 2.7, 0);
+      photoGroup.add(tube);
+
+      // Dissolved Oxygen Sensor Probe
+      const probeGeo = new THREE.CylinderGeometry(0.04, 0.04, 2.4, 12);
+      const probeMat = new THREE.MeshStandardMaterial({ color: 0x0284c7, metalness: 0.8 });
+      const probe = new THREE.Mesh(probeGeo, probeMat);
+      probe.rotation.z = -0.35;
+      probe.position.set(0.9, 1.9, 0.3);
+      photoGroup.add(probe);
+
+      // Laboratory Gooseneck Illumination Lamp
+      const lampStandGeo = new THREE.CylinderGeometry(0.08, 0.08, 3.8, 16);
+      const lampStand = new THREE.Mesh(lampStandGeo, new THREE.MeshStandardMaterial({ color: 0x475569, metalness: 0.8 }));
+      lampStand.position.set(-3.2, 1.9, 0);
+      photoGroup.add(lampStand);
+
+      // Lamp Hood
+      const hoodGeo = new THREE.ConeGeometry(0.65, 0.8, 20, 1, true);
+      const hoodMat = new THREE.MeshStandardMaterial({ color: 0x334155, metalness: 0.6 });
+      const hood = new THREE.Mesh(hoodGeo, hoodMat);
+      hood.rotation.z = -Math.PI / 2.8;
+      hood.position.set(-2.4, 2.6, 0);
+      photoGroup.add(hood);
+
+      // Spotlight shining on beaker
+      const spotLight = new THREE.SpotLight(0xffffff, 2.5);
+      spotLight.position.set(-2.4, 2.6, 0);
+      spotLight.target = beaker;
+      spotLight.angle = 0.55;
+      spotLight.penumbra = 0.4;
+      photoGroup.add(spotLight);
+      lampLightRef.current = spotLight;
+
+      // Visual Light Cone Mesh
+      const beamGeo = new THREE.ConeGeometry(1.6, 3.2, 24, 1, true);
+      beamGeo.translate(0, -1.6, 0);
+      const beamMat = new THREE.MeshBasicMaterial({
+        color: 0xffffff,
+        transparent: true,
+        opacity: 0.15,
+        side: THREE.DoubleSide,
+      });
+      const beamMesh = new THREE.Mesh(beamGeo, beamMat);
+      beamMesh.position.set(-2.4, 2.6, 0);
+      beamMesh.lookAt(0, 1.6, 0);
+      beamMesh.rotateX(-Math.PI / 2);
+      photoGroup.add(beamMesh);
+      lampBeamMeshRef.current = beamMesh;
+
+      // Rising Oxygen Bubble Particles (stream from stem into tube)
+      const numBubbles = 45;
+      const bubblePositions = new Float32Array(numBubbles * 3);
+      for (let i = 0; i < numBubbles; i++) {
+        bubblePositions[i * 3] = (Math.random() - 0.5) * 0.1;
+        bubblePositions[i * 3 + 1] = 1.6 + Math.random() * 1.8;
+        bubblePositions[i * 3 + 2] = (Math.random() - 0.5) * 0.1;
+      }
+      const bGeo = new THREE.BufferGeometry();
+      bGeo.setAttribute("position", new THREE.BufferAttribute(bubblePositions, 3));
+      const bMat = new THREE.PointsMaterial({
+        color: 0xffffff,
+        size: 0.07,
+        transparent: true,
+        opacity: 0.85,
+      });
+      const bubbles = new THREE.Points(bGeo, bMat);
+      photoGroup.add(bubbles);
+      photoBubblesRef.current = bubbles;
+      photoBubblePosRef.current = bubblePositions;
+
+      scene.add(photoGroup);
     }
 
-    // Animation Loop Hook (Brownian Motion & Enzyme Breathing)
+    // Animation Loop Hook (Brownian Motion & Bubbles)
     const interval = setInterval(() => {
       // Rotate enzyme slowly
       if (enzymeGroupRef.current) {
@@ -302,13 +491,28 @@ export const BiologySimulation: React.FC<BiologySimulationProps> = ({
 
       // Jiggle substrate molecules with Brownian motion
       if (substrateGroupRef.current) {
-        substrateGroupRef.current.children.forEach((mol, idx) => {
+        substrateGroupRef.current.children.forEach((mol) => {
           mol.position.x += (Math.random() - 0.5) * 0.015;
           mol.position.y += (Math.random() - 0.5) * 0.015;
           mol.position.z += (Math.random() - 0.5) * 0.015;
           mol.rotation.x += 0.02;
           mol.rotation.y += 0.015;
         });
+      }
+
+      // Rise photosynthesis bubbles
+      if (photoBubblesRef.current && photoBubblePosRef.current && photosynthesisState) {
+        const positions = photoBubblePosRef.current;
+        const speed = Math.max(0.004, (photosynthesisState.bubbleRatePerMin / 60) * 0.025);
+        for (let b = 0; b < positions.length / 3; b++) {
+          positions[b * 3 + 1] += speed;
+          if (positions[b * 3 + 1] > 3.4) {
+            positions[b * 3 + 1] = 1.7;
+            positions[b * 3] = (Math.random() - 0.5) * 0.08;
+            positions[b * 3 + 2] = (Math.random() - 0.5) * 0.08;
+          }
+        }
+        photoBubblesRef.current.geometry.attributes.position.needsUpdate = true;
       }
     }, 20);
 
@@ -319,8 +523,20 @@ export const BiologySimulation: React.FC<BiologySimulationProps> = ({
     <div className="relative w-full h-full">
       <ThreeCanvasWrapper
         onSceneReady={handleSceneReady}
-        cameraPosition={experimentId === "enzyme_kinetics" ? [0, 4.0, 7.0] : [0, 7.5, 0.01]}
-        cameraTarget={experimentId === "enzyme_kinetics" ? [0, 1.6, 0] : [0, 0, 0]}
+        cameraPosition={
+          experimentId === "enzyme_kinetics"
+            ? [0, 4.0, 7.0]
+            : experimentId === "photosynthesis"
+            ? [0, 2.8, 6.8]
+            : [0, 7.5, 0.01]
+        }
+        cameraTarget={
+          experimentId === "enzyme_kinetics"
+            ? [0, 1.6, 0]
+            : experimentId === "photosynthesis"
+            ? [0, 1.6, 0]
+            : [0, 0, 0]
+        }
       />
 
       {/* Real-Time Biology Telemetry HUD */}
@@ -366,6 +582,32 @@ export const BiologySimulation: React.FC<BiologySimulationProps> = ({
                 </div>
               </>
             )}
+          </div>
+        )}
+
+        {experimentId === "photosynthesis" && photosynthesisState && (
+          <div className="bg-slate-900/85 backdrop-blur-md border border-slate-700/80 px-3 py-2 rounded-lg shadow-xl font-mono text-xs flex items-center gap-3">
+            <div>
+              <span className="text-slate-400 block text-[10px] uppercase tracking-wider">Dissolved O₂</span>
+              <span className="text-cyan-400 text-lg font-bold">
+                {photosynthesisState.dissolvedOxygenMg_L.toFixed(2)} <span className="text-[10px] font-normal">mg/L</span>
+              </span>
+            </div>
+            <div className="w-[1px] h-7 bg-slate-700" />
+            <div>
+              <span className="text-slate-400 block text-[10px] uppercase tracking-wider">O₂ Bubble Rate</span>
+              <span className="text-emerald-400 font-semibold">{photosynthesisState.bubbleRatePerMin.toFixed(0)} /min</span>
+            </div>
+            <div className="w-[1px] h-7 bg-slate-700" />
+            <div>
+              <span className="text-slate-400 block text-[10px] uppercase tracking-wider">Net O₂ Rate</span>
+              <span className="text-amber-400 font-semibold">{photosynthesisState.netPhotosyntheticRate.toFixed(1)} μmol/hr</span>
+            </div>
+            <div className="w-[1px] h-7 bg-slate-700" />
+            <div>
+              <span className="text-slate-400 block text-[10px] uppercase tracking-wider">Light Level</span>
+              <span className="text-white font-semibold">{photosynthesisState.lightIntensity} μmol/m²·s</span>
+            </div>
           </div>
         )}
       </div>

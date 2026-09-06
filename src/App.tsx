@@ -17,14 +17,63 @@ import {
   calculatePrismDispersion,
   calculateEnzymeKinetics,
   calculateBacterialDynamics,
+  calculateSpectrophotometry,
+  stepPendulumRK4,
+  calculatePhotosynthesis,
   TitrationResult,
   GasReactionState,
   ProjectileState,
   RayPath,
   EnzymeKineticsState,
   BacterialGrowthState,
+  SpectrophotometryState,
+  PendulumState,
+  PhotosynthesisState,
 } from "./utils/physicsEngine";
 import { useLabTheme } from "./context/ThemeContext";
+
+const normalizeSolute = (s?: string) => {
+  if (!s) return "CuSO4";
+  if (s === "copper_sulfate" || s === "CuSO4") return "CuSO4";
+  if (s === "potassium_permanganate" || s === "KMnO4") return "KMnO4";
+  if (s === "tartrazine" || s === "Tartrazine") return "Tartrazine";
+  if (s === "nickel_chloride" || s === "NiCl2") return "NiCl2";
+  return "CuSO4";
+};
+
+const createInitialPendulumState = (params: Record<string, any>): PendulumState => {
+  const length = params.length || params.stringLength || 1.0;
+  const mass = params.mass || params.bobMass || 1.0;
+  const gravity = params.gravity || 9.81;
+  const damping = params.dampingCoeff ?? params.damping ?? 0.05;
+  const angleDeg = params.initialAngle ?? 30;
+  const angleRad = (angleDeg * Math.PI) / 180;
+  const potEnergy = mass * gravity * (length - length * Math.cos(angleRad));
+  const T0 = 2 * Math.PI * Math.sqrt(length / Math.max(0.1, gravity));
+  const period = T0 * (1 + (angleRad * angleRad) / 16);
+
+  return {
+    angleRad,
+    angleDeg,
+    angularVelocity: 0,
+    angularAcceleration: -(gravity / length) * Math.sin(angleRad),
+    timeElapsed: 0,
+    length,
+    mass,
+    gravity,
+    damping,
+    kineticEnergy: 0,
+    potentialEnergy: Number(potEnergy.toFixed(3)),
+    totalEnergy: Number(potEnergy.toFixed(3)),
+    theoreticalPeriod: Number(period.toFixed(3)),
+    bobPosition: {
+      x: Number((length * Math.sin(angleRad)).toFixed(3)),
+      y: Number((-length * Math.cos(angleRad)).toFixed(3)),
+      z: 0,
+    },
+    bobVelocity: { vx: 0, vy: 0, vz: 0 },
+  };
+};
 
 export default function App() {
   const { isLight } = useLabTheme();
@@ -102,6 +151,21 @@ export default function App() {
     calculateBacterialDynamics(0, 1000, 100, 37, "none", 20)
   );
 
+  // Spectrophotometry & Beer-Lambert
+  const [spectroState, setSpectroState] = useState<SpectrophotometryState>(() =>
+    calculateSpectrophotometry("CuSO4", 0.15, 1.0, 635)
+  );
+
+  // Harmonic Pendulum
+  const [pendulumState, setPendulumState] = useState<PendulumState>(() =>
+    createInitialPendulumState({ length: 1.0, mass: 1.0, initialAngle: 30, gravity: 9.81, dampingCoeff: 0.05 })
+  );
+
+  // Photosynthesis & Respiration
+  const [photosynthesisState, setPhotosynthesisState] = useState<PhotosynthesisState>(() =>
+    calculatePhotosynthesis(600, "white", 15, 24, 7.5, 0.05)
+  );
+
   // Handle switching discipline
   const handleSelectDiscipline = (disc: DisciplineType) => {
     setCurrentDiscipline(disc);
@@ -152,6 +216,27 @@ export default function App() {
           simulationTime
         );
         setEnzymeState(newEnzyme);
+      } else if (currentExperimentId === "spectrophotometry") {
+        const solute = normalizeSolute(updated.solute);
+        const conc = updated.concentration ?? (solute === "KMnO4" ? 0.001 : 0.15);
+        const path = updated.pathLength ?? 1.0;
+        const wl = updated.wavelength ?? 635;
+        const newSpectro = calculateSpectrophotometry(solute, conc, path, wl);
+        setSpectroState(newSpectro);
+      } else if (currentExperimentId === "pendulum_harmonic") {
+        if (!isRunning) {
+          setPendulumState(createInitialPendulumState(updated));
+        }
+      } else if (currentExperimentId === "photosynthesis") {
+        const newPhoto = calculatePhotosynthesis(
+          updated.lightIntensity ?? 600,
+          updated.lightColor ?? "white",
+          updated.co2DonorConc ?? updated.bicarbonateConc ?? 15,
+          updated.temperature ?? 24,
+          photosynthesisState.dissolvedOxygenMgL,
+          0.05
+        );
+        setPhotosynthesisState(newPhoto);
       }
       return updated;
     });
@@ -199,6 +284,29 @@ export default function App() {
       });
     } else if (id === "bacterial_growth") {
       setBacterialState(calculateBacterialDynamics(0, 1000, 100, 37, "none", 20));
+    } else if (id === "spectrophotometry") {
+      const solute = normalizeSolute(parameters.solute);
+      setSpectroState(
+        calculateSpectrophotometry(
+          solute,
+          parameters.concentration ?? (solute === "KMnO4" ? 0.001 : 0.15),
+          parameters.pathLength ?? 1.0,
+          parameters.wavelength ?? 635
+        )
+      );
+    } else if (id === "pendulum_harmonic") {
+      setPendulumState(createInitialPendulumState(parameters));
+    } else if (id === "photosynthesis") {
+      setPhotosynthesisState(
+        calculatePhotosynthesis(
+          parameters.lightIntensity ?? 600,
+          parameters.lightColor ?? "white",
+          parameters.co2DonorConc ?? parameters.bicarbonateConc ?? 15,
+          parameters.temperature ?? 24,
+          7.5,
+          0.05
+        )
+      );
     }
   };
 
@@ -431,12 +539,87 @@ export default function App() {
           ]);
         }
 
+        // 6. Spectrophotometry Continuous Scan
+        else if (currentExperimentId === "spectrophotometry") {
+          const currentWl = parameters.wavelength ?? 635;
+          const nextWl = currentWl >= 750 ? 380 : currentWl + 2;
+          const solute = normalizeSolute(parameters.solute);
+          const conc = parameters.concentration ?? (solute === "KMnO4" ? 0.001 : 0.15);
+          const path = parameters.pathLength ?? 1.0;
+          const nextState = calculateSpectrophotometry(solute, conc, path, nextWl);
+          setSpectroState(nextState);
+          setParameters((p) => ({ ...p, wavelength: nextWl }));
+
+          setDataPoints((pts) => [
+            ...pts,
+            {
+              time: parseFloat(newT.toFixed(1)),
+              wavelength: nextWl,
+              concentration: conc,
+              absorbance: nextState.absorbance,
+              transmittancePct: nextState.transmittancePct,
+              molarAbsorptivity: nextState.molarAbsorptivity,
+            },
+          ]);
+        }
+
+        // 7. Harmonic Pendulum RK4 Integration
+        else if (currentExperimentId === "pendulum_harmonic") {
+          const nextState = stepPendulumRK4(
+            pendulumState,
+            dt,
+            parameters.length || parameters.stringLength || 1.0,
+            parameters.mass || parameters.bobMass || 1.0,
+            parameters.gravity || 9.81,
+            parameters.dampingCoeff ?? parameters.damping ?? 0.05
+          );
+          setPendulumState(nextState);
+
+          if (Math.round(newT * 20) % 2 === 0) {
+            setDataPoints((pts) => [
+              ...pts,
+              {
+                time: parseFloat(newT.toFixed(2)),
+                angleDeg: nextState.angleDeg,
+                angularVelocity: nextState.angularVelocity,
+                kineticEnergy: nextState.kineticEnergy,
+                potentialEnergy: nextState.potentialEnergy,
+                totalEnergy: nextState.totalEnergy,
+              },
+            ]);
+          }
+        }
+
+        // 8. Photosynthesis & Respiration Gas Exchange
+        else if (currentExperimentId === "photosynthesis") {
+          const nextState = calculatePhotosynthesis(
+            parameters.lightIntensity ?? 600,
+            parameters.lightColor ?? "white",
+            parameters.co2DonorConc ?? parameters.bicarbonateConc ?? 15,
+            parameters.temperature ?? 24,
+            photosynthesisState.dissolvedOxygenMgL,
+            dt
+          );
+          setPhotosynthesisState(nextState);
+
+          setDataPoints((pts) => [
+            ...pts,
+            {
+              time: parseFloat(newT.toFixed(1)),
+              dissolvedOxygenMgL: nextState.dissolvedOxygenMgL,
+              o2ProducedML: parseFloat((Math.max(0, nextState.netPhotosynthesisRate) * (newT / 3600) * 0.0224).toFixed(3)),
+              bubbleRate: nextState.bubbleRatePerMin,
+              netRate: nextState.netPhotosynthesisRate,
+            },
+          ]);
+        }
+
         return newT;
       });
     }, 50);
 
     return () => clearInterval(interval);
-  }, [isRunning, currentExperimentId, parameters, titrationState.addedTitrantVolume, projectileState]);
+  }, [isRunning, currentExperimentId, parameters, titrationState.addedTitrantVolume, projectileState, pendulumState, photosynthesisState]);
 
   // Handle Snapshot / Record Point
   const handleSnapshotPoint = () => {
@@ -481,13 +664,39 @@ export default function App() {
         invSubstrate: parseFloat((1 / (parameters.substrateConcentration || 15)).toFixed(3)),
         invVelocity: parseFloat((1 / Math.max(0.1, enzymeState.velocity)).toFixed(3)),
       };
-    } else {
+    } else if (currentExperimentId === "bacterial_growth") {
       newPt = {
         time: parseFloat(bacterialState.timeHours.toFixed(1)),
         timeHours: parseFloat(bacterialState.timeHours.toFixed(1)),
         opticalDensityOD600: parseFloat(bacterialState.opticalDensityOD600.toFixed(3)),
         cellCount: Math.round(bacterialState.cellCount),
         zoneDiameterMM: parseFloat(bacterialState.zoneOfInhibitionDiameterMM.toFixed(1)),
+      };
+    } else if (currentExperimentId === "spectrophotometry") {
+      newPt = {
+        time: parseFloat(simulationTime.toFixed(1)),
+        wavelength: spectroState.wavelengthNm,
+        concentration: spectroState.concentrationM,
+        absorbance: spectroState.absorbance,
+        transmittancePct: spectroState.transmittancePct,
+        molarAbsorptivity: spectroState.molarAbsorptivity,
+      };
+    } else if (currentExperimentId === "pendulum_harmonic") {
+      newPt = {
+        time: parseFloat(pendulumState.timeElapsed.toFixed(2)),
+        angleDeg: pendulumState.angleDeg,
+        angularVelocity: pendulumState.angularVelocity,
+        kineticEnergy: pendulumState.kineticEnergy,
+        potentialEnergy: pendulumState.potentialEnergy,
+        totalEnergy: pendulumState.totalEnergy,
+      };
+    } else if (currentExperimentId === "photosynthesis") {
+      newPt = {
+        time: parseFloat(simulationTime.toFixed(1)),
+        dissolvedOxygenMgL: photosynthesisState.dissolvedOxygenMgL,
+        o2ProducedML: parseFloat((Math.max(0, photosynthesisState.netPhotosynthesisRate) * (simulationTime / 3600) * 0.0224).toFixed(3)),
+        bubbleRate: photosynthesisState.bubbleRatePerMin,
+        netRate: photosynthesisState.netPhotosynthesisRate,
       };
     }
     setDataPoints((prev) => [...prev, newPt]);
@@ -523,10 +732,29 @@ export default function App() {
         "Apparent Vmax": `${enzymeState.apparentVmax.toFixed(1)} μmol/min`,
         "Apparent Km": `${enzymeState.apparentKm.toFixed(2)} mM`,
       };
-    } else {
+    } else if (currentExperimentId === "bacterial_growth") {
       summary = {
         "OD600": bacterialState.opticalDensityOD600.toFixed(3),
         "Zone of Inhibition": `${bacterialState.zoneOfInhibitionDiameterMM.toFixed(1)} mm`,
+      };
+    } else if (currentExperimentId === "spectrophotometry") {
+      summary = {
+        "Solute": spectroState.solute,
+        "Absorbance": spectroState.absorbance.toFixed(3),
+        "Transmittance": `${spectroState.transmittancePct.toFixed(1)}%`,
+        "Peak λ": `${spectroState.peakWavelengthNm} nm`,
+      };
+    } else if (currentExperimentId === "pendulum_harmonic") {
+      summary = {
+        "Period T": `${pendulumState.theoreticalPeriod.toFixed(2)} s`,
+        "Initial θ": `${parameters.initialAngle || 30}°`,
+        "Total Energy": `${pendulumState.totalEnergy.toFixed(2)} J`,
+      };
+    } else if (currentExperimentId === "photosynthesis") {
+      summary = {
+        "Dissolved O₂": `${photosynthesisState.dissolvedOxygenMgL.toFixed(2)} mg/L`,
+        "Bubble Rate": `${photosynthesisState.bubbleRatePerMin} /min`,
+        "Net O₂ Rate": `${photosynthesisState.netPhotosynthesisRate.toFixed(1)} μmol/h`,
       };
     }
 
@@ -628,7 +856,7 @@ export default function App() {
         value4: enzymeState.apparentVmax.toFixed(1),
         unit4: "μmol/min",
       };
-    } else {
+    } else if (currentExperimentId === "bacterial_growth") {
       return {
         label1: "Absorbance OD₆₀₀",
         value1: bacterialState.opticalDensityOD600.toFixed(3),
@@ -643,6 +871,52 @@ export default function App() {
         value4: bacterialState.timeHours.toFixed(1),
         unit4: "hrs",
       };
+    } else if (currentExperimentId === "spectrophotometry") {
+      return {
+        label1: "Absorbance (A)",
+        value1: spectroState.absorbance.toFixed(3),
+        unit1: "AU",
+        label2: "Transmittance",
+        value2: spectroState.transmittancePct.toFixed(1),
+        unit2: "%T",
+        label3: "Wavelength λ",
+        value3: spectroState.wavelengthNm,
+        unit3: "nm",
+        label4: "Molar Absorptivity",
+        value4: spectroState.molarAbsorptivity.toFixed(0),
+        unit4: "L/(mol·cm)",
+      };
+    } else if (currentExperimentId === "pendulum_harmonic") {
+      return {
+        label1: "Deflection θ",
+        value1: pendulumState.angleDeg.toFixed(1),
+        unit1: "deg",
+        label2: "Angular Vel ω",
+        value2: pendulumState.angularVelocity.toFixed(2),
+        unit2: "rad/s",
+        label3: "Total Energy",
+        value3: pendulumState.totalEnergy.toFixed(2),
+        unit3: "J",
+        label4: "Period T",
+        value4: pendulumState.theoreticalPeriod.toFixed(2),
+        unit4: "s",
+      };
+    } else {
+      // photosynthesis
+      return {
+        label1: "Dissolved O₂",
+        value1: photosynthesisState.dissolvedOxygenMgL.toFixed(2),
+        unit1: "mg/L",
+        label2: "Ebullition Rate",
+        value2: photosynthesisState.bubbleRatePerMin,
+        unit2: "bubbles/min",
+        label3: "Net O₂ Evolution",
+        value3: photosynthesisState.netPhotosynthesisRate.toFixed(1),
+        unit3: "μmol/h",
+        label4: "Quantum Yield",
+        value4: `${photosynthesisState.photochemicalYieldPct.toFixed(0)}%`,
+        unit4: "",
+      };
     }
   }, [
     currentExperimentId,
@@ -652,6 +926,9 @@ export default function App() {
     prismRays,
     enzymeState,
     bacterialState,
+    spectroState,
+    pendulumState,
+    photosynthesisState,
     parameters,
   ]);
 
@@ -697,9 +974,10 @@ export default function App() {
         >
           {currentDiscipline === "chemistry" && (
             <ChemistrySimulation
-              experimentId={currentExperimentId as "titration" | "reaction_kinetics"}
+              experimentId={currentExperimentId as "titration" | "reaction_kinetics" | "spectrophotometry"}
               titrationState={titrationState}
               gasState={gasState}
+              spectroState={spectroState}
               stirringSpeed={parameters.stirringSpeed ?? 400}
               temperature={parameters.temperature ?? 25}
               isDispensing={isRunning}
@@ -708,7 +986,7 @@ export default function App() {
 
           {currentDiscipline === "physics" && (
             <PhysicsSimulation
-              experimentId={currentExperimentId as "projectile" | "optics_prism"}
+              experimentId={currentExperimentId as "projectile" | "optics_prism" | "pendulum_harmonic"}
               projectileState={projectileState}
               pastTrajectory={pastTrajectory}
               launchAngle={parameters.launchAngle || 45}
@@ -716,18 +994,22 @@ export default function App() {
               prismRayPaths={prismRays}
               lightMode={parameters.lightMode || "white"}
               incidentAngle={parameters.incidentAngle || 45}
+              pendulumState={pendulumState}
             />
           )}
 
           {currentDiscipline === "biology" && (
             <BiologySimulation
-              experimentId={currentExperimentId as "enzyme_kinetics" | "bacterial_growth"}
+              experimentId={currentExperimentId as "enzyme_kinetics" | "bacterial_growth" | "photosynthesis"}
               enzymeState={enzymeState}
               bacterialState={bacterialState}
+              photosynthesisState={photosynthesisState}
               substrateConc={parameters.substrateConcentration || 15}
               inhibitorType={parameters.inhibitorType || "none"}
               antibioticDose={parameters.antibioticDose || 20}
               gfpFluorescence={!!parameters.gfpFluorescence}
+              lightColor={parameters.lightColor || "white"}
+              lightIntensity={parameters.lightIntensity || 600}
             />
           )}
         </main>

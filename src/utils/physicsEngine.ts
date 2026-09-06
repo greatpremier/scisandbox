@@ -708,3 +708,264 @@ export function calculateBacterialDynamics(
     antibioticEfficacy: efficacy,
   };
 }
+
+// ==================== CHEMISTRY: SPECTROPHOTOMETRY & BEER-LAMBERT ====================
+export interface SpectrophotometryState {
+  solute: "CuSO4" | "KMnO4" | "Tartrazine" | "NiCl2";
+  concentrationM: number; // M
+  pathLengthCm: number; // cm
+  wavelengthNm: number; // nm
+  peakWavelengthNm: number;
+  molarAbsorptivity: number; // L/(mol*cm)
+  absorbance: number; // A = eps * b * c
+  transmittancePct: number; // %T = 100 * 10^(-A)
+  solutionHex: number;
+  solutionColor: string;
+  isSaturated: boolean;
+}
+
+export function calculateSpectrophotometry(
+  solute: string,
+  concentrationM: number,
+  pathLengthCm: number,
+  wavelengthNm: number
+): SpectrophotometryState {
+  let peakWl = 635;
+  let maxEps = 12.8;
+  let bandwidth = 70;
+  let baseColorHex = 0x2563eb;
+  let baseColorRgb = [37, 99, 235];
+
+  if (solute === "KMnO4") {
+    peakWl = 525;
+    maxEps = 2400.0;
+    bandwidth = 42;
+    baseColorHex = 0x9333ea;
+    baseColorRgb = [147, 51, 234];
+  } else if (solute === "Tartrazine") {
+    peakWl = 428;
+    maxEps = 22000.0;
+    bandwidth = 35;
+    baseColorHex = 0xeab308;
+    baseColorRgb = [234, 179, 8];
+  } else if (solute === "NiCl2") {
+    peakWl = 395;
+    maxEps = 5.6;
+    bandwidth = 50;
+    baseColorHex = 0x10b981;
+    baseColorRgb = [16, 185, 129];
+  } else {
+    // CuSO4 default
+    peakWl = 635;
+    maxEps = 12.8;
+    bandwidth = 75;
+    baseColorHex = 0x0284c7;
+    baseColorRgb = [2, 132, 199];
+  }
+
+  // Gaussian profile for absorption spectrum
+  const deltaWl = wavelengthNm - peakWl;
+  const eps = maxEps * Math.exp(-0.5 * Math.pow(deltaWl / bandwidth, 2));
+
+  // A = eps * b * c (Beer-Lambert law)
+  const rawAbsorbance = eps * pathLengthCm * concentrationM;
+  const isSaturated = rawAbsorbance > 3.2;
+  const absorbance = Number(Math.min(3.5, Math.max(0, rawAbsorbance)).toFixed(3));
+
+  // Transmittance %T = 100 * 10^(-A)
+  const transmittancePct = Number(Math.max(0, Math.min(100, 100 * Math.pow(10, -absorbance))).toFixed(1));
+
+  // Solution opacity and shade scaling with concentration
+  const alpha = Math.min(0.95, Math.max(0.12, (absorbance / 2.0) * 0.8 + 0.15));
+  const solutionColor = `rgba(${baseColorRgb[0]}, ${baseColorRgb[1]}, ${baseColorRgb[2]}, ${alpha.toFixed(2)})`;
+
+  return {
+    solute: solute as any,
+    concentrationM,
+    pathLengthCm,
+    wavelengthNm,
+    peakWavelengthNm: peakWl,
+    molarAbsorptivity: Number(eps.toFixed(1)),
+    absorbance,
+    transmittancePct,
+    solutionHex: baseColorHex,
+    solutionColor,
+    isSaturated,
+  };
+}
+
+// ==================== PHYSICS: HARMONIC PENDULUM ====================
+export interface PendulumState {
+  angleRad: number; // theta in radians
+  angleDeg: number; // theta in degrees
+  angularVelocity: number; // omega (rad/s)
+  angularAcceleration: number; // alpha (rad/s^2)
+  timeElapsed: number; // s
+  length: number; // m
+  mass: number; // kg
+  gravity: number; // m/s^2
+  damping: number; // gamma (s^-1)
+  kineticEnergy: number; // J
+  potentialEnergy: number; // J
+  totalEnergy: number; // J
+  theoreticalPeriod: number; // s
+  bobPosition: { x: number; y: number; z: number };
+  bobVelocity: { vx: number; vy: number; vz: number };
+}
+
+export function stepPendulumRK4(
+  current: PendulumState,
+  dt: number,
+  length: number,
+  mass: number,
+  gravity: number,
+  damping: number
+): PendulumState {
+  // Equation of motion: d2theta/dt2 = -(g/L)*sin(theta) - gamma*omega
+  const f_alpha = (th: number, om: number) => {
+    return -(gravity / Math.max(0.1, length)) * Math.sin(th) - damping * om;
+  };
+
+  const k1_th = current.angularVelocity;
+  const k1_om = f_alpha(current.angleRad, current.angularVelocity);
+
+  const k2_th = current.angularVelocity + 0.5 * dt * k1_om;
+  const k2_om = f_alpha(current.angleRad + 0.5 * dt * k1_th, k2_th);
+
+  const k3_th = current.angularVelocity + 0.5 * dt * k2_om;
+  const k3_om = f_alpha(current.angleRad + 0.5 * dt * k2_th, k3_th);
+
+  const k4_th = current.angularVelocity + dt * k3_om;
+  const k4_om = f_alpha(current.angleRad + dt * k3_th, k4_th);
+
+  const newAngleRad = current.angleRad + (dt / 6) * (k1_th + 2 * k2_th + 2 * k3_th + k4_th);
+  const newOmega = current.angularVelocity + (dt / 6) * (k1_om + 2 * k2_om + 2 * k3_om + k4_om);
+  const newAlpha = f_alpha(newAngleRad, newOmega);
+
+  // Bob spatial coordinates in 3D (Z-plane swing, origin at suspension point)
+  const bobX = length * Math.sin(newAngleRad);
+  const bobY = -length * Math.cos(newAngleRad);
+  const bobZ = 0;
+
+  const vTangential = length * newOmega;
+  const vx = vTangential * Math.cos(newAngleRad);
+  const vy = vTangential * Math.sin(newAngleRad);
+
+  const kineticEnergy = 0.5 * mass * vTangential * vTangential;
+  const potentialEnergy = mass * gravity * (length - length * Math.cos(newAngleRad));
+  const totalEnergy = kineticEnergy + potentialEnergy;
+
+  // Theoretical large angle period: T approx 2*pi*sqrt(L/g) * (1 + theta0^2 / 16)
+  const T0 = 2 * Math.PI * Math.sqrt(length / Math.max(0.1, gravity));
+  const theoreticalPeriod = T0 * (1 + Math.pow(newAngleRad, 2) / 16);
+
+  return {
+    angleRad: newAngleRad,
+    angleDeg: Number(((newAngleRad * 180) / Math.PI).toFixed(2)),
+    angularVelocity: Number(newOmega.toFixed(3)),
+    angularAcceleration: Number(newAlpha.toFixed(3)),
+    timeElapsed: Number((current.timeElapsed + dt).toFixed(3)),
+    length,
+    mass,
+    gravity,
+    damping,
+    kineticEnergy: Number(kineticEnergy.toFixed(3)),
+    potentialEnergy: Number(potentialEnergy.toFixed(3)),
+    totalEnergy: Number(totalEnergy.toFixed(3)),
+    theoreticalPeriod: Number(theoreticalPeriod.toFixed(3)),
+    bobPosition: {
+      x: Number(bobX.toFixed(3)),
+      y: Number(bobY.toFixed(3)),
+      z: bobZ,
+    },
+    bobVelocity: {
+      vx: Number(vx.toFixed(3)),
+      vy: Number(vy.toFixed(3)),
+      vz: 0,
+    },
+  };
+}
+
+// ==================== BIOLOGY: PHOTOSYNTHESIS & RESPIRATION ====================
+export interface PhotosynthesisState {
+  lightIntensity: number; // umol photons / (m^2 * s)
+  lightColor: "white" | "blue" | "red" | "green";
+  bicarbonateConcMM: number; // mM
+  temperatureC: number; // °C
+  dissolvedOxygenMgL: number; // mg/L
+  bubbleRatePerMin: number; // bubbles/min
+  grossPhotosynthesisRate: number; // umol O2 / hr
+  respirationRate: number; // umol O2 / hr
+  netPhotosynthesisRate: number; // umol O2 / hr
+  isLightCompensationPoint: boolean;
+  photochemicalYieldPct: number;
+}
+
+export function calculatePhotosynthesis(
+  lightIntensity: number,
+  lightColor: string,
+  bicarbonateConcMM: number,
+  temperatureC: number,
+  currentDissolvedOxygen = 7.5,
+  dtSeconds = 0.05
+): PhotosynthesisState {
+  // Chlorophyll Action Spectrum Filter Efficiency
+  let spectrumFactor = 0.88; // White
+  if (lightColor === "blue") spectrumFactor = 0.98; // 450 nm peak
+  else if (lightColor === "red") spectrumFactor = 1.0; // 660 nm peak
+  else if (lightColor === "green") spectrumFactor = 0.16; // Reflective drop
+
+  // Light saturation Michaelis-Menten: I / (I + KI)
+  const KI = 320.0;
+  const effectiveLight = lightIntensity * spectrumFactor;
+  const lightFactor = effectiveLight / (effectiveLight + KI);
+
+  // Carbon saturation: [CO2] / ([CO2] + Kc)
+  const Kc = 8.0; // mM
+  const carbonFactor = bicarbonateConcMM / (bicarbonateConcMM + Kc);
+
+  // Temperature response: Q10 up to 28°C, denaturation above 38°C
+  let tempFactor = 1.0;
+  if (temperatureC <= 28) {
+    tempFactor = Math.pow(1.8, (temperatureC - 25) / 10);
+  } else {
+    tempFactor = Math.max(0.05, 1.0 - Math.pow((temperatureC - 28) / 16, 2.0));
+  }
+  tempFactor = Math.max(0.05, Math.min(1.2, tempFactor));
+
+  // Maximum gross rate = 85 umol O2 / hr
+  const Pmax = 85.0;
+  const grossPhotosynthesisRate = Pmax * lightFactor * carbonFactor * tempFactor;
+
+  // Dark respiration rate (constant cellular metabolism consuming O2)
+  const baseRespiration = 7.2;
+  const respirationRate = baseRespiration * Math.pow(1.9, (temperatureC - 20) / 10);
+
+  // Net rate = Gross - Respiration
+  const netPhotosynthesisRate = grossPhotosynthesisRate - respirationRate;
+
+  // Oxygen bubble generation rate (bubbles per minute from stem)
+  const bubbleRate = Math.max(0, Math.round(Math.max(0, netPhotosynthesisRate) * 0.75));
+
+  // Dissolved Oxygen accumulation
+  // Net rate of 10 umol/hr adds ~0.005 mg/L per minute
+  const deltaDO = (netPhotosynthesisRate / 100) * (dtSeconds / 60) * 0.8;
+  const dissolvedOxygenMgL = Number(Math.max(1.0, Math.min(18.0, currentDissolvedOxygen + deltaDO)).toFixed(3));
+
+  const isLightCompensationPoint = Math.abs(netPhotosynthesisRate) < 1.0;
+  const photochemicalYieldPct = Number(Math.min(100, Math.max(0, (effectiveLight / (effectiveLight + 150)) * 92)).toFixed(1));
+
+  return {
+    lightIntensity,
+    lightColor: lightColor as any,
+    bicarbonateConcMM,
+    temperatureC: Number(temperatureC.toFixed(1)),
+    dissolvedOxygenMgL,
+    bubbleRatePerMin: bubbleRate,
+    grossPhotosynthesisRate: Number(grossPhotosynthesisRate.toFixed(2)),
+    respirationRate: Number(respirationRate.toFixed(2)),
+    netPhotosynthesisRate: Number(netPhotosynthesisRate.toFixed(2)),
+    isLightCompensationPoint,
+    photochemicalYieldPct,
+  };
+}

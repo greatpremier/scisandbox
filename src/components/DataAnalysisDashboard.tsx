@@ -149,6 +149,12 @@ export const DataAnalysisDashboard: React.FC<DataAnalysisDashboardProps> = ({
                   ? "Energy Conservation"
                   : experimentId === "enzyme_kinetics"
                   ? "Lineweaver-Burk Plot"
+                  : experimentId === "spectrophotometry"
+                  ? "Transmittance %T"
+                  : experimentId === "pendulum_harmonic"
+                  ? "Energy Partition (Ek/Ep)"
+                  : experimentId === "photosynthesis"
+                  ? "Dissolved O₂ Curve"
                   : "Rate Kinetics"}
               </button>
               <button
@@ -396,6 +402,69 @@ export const DataAnalysisDashboard: React.FC<DataAnalysisDashboardProps> = ({
                           isAnimationActive={false}
                         />
                       </LineChart>
+                    ) : experimentId === "spectrophotometry" ? (
+                      <LineChart data={dataPoints} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} />
+                        <XAxis
+                          dataKey="concentration"
+                          stroke={axisStroke}
+                          fontSize={11}
+                          tickFormatter={(v) => (typeof v === "number" && v < 0.01 ? `${(v * 1000).toFixed(1)}mM` : `${v}M`)}
+                        />
+                        <YAxis stroke={axisStroke} fontSize={11} domain={[0, "auto"]} />
+                        <Tooltip contentStyle={tooltipStyle} />
+                        <Line
+                          type="monotone"
+                          dataKey="absorbance"
+                          name="Absorbance (A)"
+                          stroke={primaryStroke}
+                          strokeWidth={2.5}
+                          dot={{ r: 3 }}
+                          isAnimationActive={false}
+                        />
+                      </LineChart>
+                    ) : experimentId === "pendulum_harmonic" ? (
+                      <LineChart data={dataPoints} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} />
+                        <XAxis dataKey="time" stroke={axisStroke} fontSize={11} tickFormatter={(v) => `${v}s`} />
+                        <YAxis stroke={axisStroke} fontSize={11} domain={["auto", "auto"]} />
+                        <Tooltip contentStyle={tooltipStyle} />
+                        <ReferenceLine y={0} stroke={axisStroke} strokeDasharray="2 2" />
+                        <Line
+                          type="monotone"
+                          dataKey="angleDeg"
+                          name="Angular Displacement θ (°)"
+                          stroke={primaryStroke}
+                          strokeWidth={2.5}
+                          dot={false}
+                          isAnimationActive={false}
+                        />
+                      </LineChart>
+                    ) : experimentId === "photosynthesis" ? (
+                      <LineChart data={dataPoints} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} />
+                        <XAxis dataKey="time" stroke={axisStroke} fontSize={11} tickFormatter={(v) => `${v}s`} />
+                        <YAxis stroke={axisStroke} fontSize={11} />
+                        <Tooltip contentStyle={tooltipStyle} />
+                        <Line
+                          type="monotone"
+                          dataKey="o2ProducedML"
+                          name="O₂ Volume (mL)"
+                          stroke={emeraldStroke}
+                          strokeWidth={2.5}
+                          dot={false}
+                          isAnimationActive={false}
+                        />
+                        <Line
+                          type="monotone"
+                          dataKey="bubbleRate"
+                          name="Bubble Rate (bubbles/min)"
+                          stroke={primaryStroke}
+                          strokeWidth={1.5}
+                          dot={false}
+                          isAnimationActive={false}
+                        />
+                      </LineChart>
                     ) : (
                       // Bacterial Growth
                       <LineChart data={dataPoints} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
@@ -476,6 +545,68 @@ export const DataAnalysisDashboard: React.FC<DataAnalysisDashboardProps> = ({
                           stroke={amberStroke}
                           strokeWidth={2}
                           dot={{ r: 3 }}
+                          isAnimationActive={false}
+                        />
+                      </LineChart>
+                    ) : experimentId === "spectrophotometry" ? (
+                      <LineChart data={dataPoints} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} />
+                        <XAxis
+                          dataKey="concentration"
+                          stroke={axisStroke}
+                          fontSize={11}
+                          tickFormatter={(v) => (typeof v === "number" && v < 0.01 ? `${(v * 1000).toFixed(1)}mM` : `${v}M`)}
+                        />
+                        <YAxis stroke={axisStroke} fontSize={11} domain={[0, 100]} unit="%" />
+                        <Tooltip contentStyle={tooltipStyle} />
+                        <Line
+                          type="monotone"
+                          dataKey="transmittancePct"
+                          name="Transmittance (%T)"
+                          stroke={emeraldStroke}
+                          strokeWidth={2}
+                          dot={{ r: 3 }}
+                          isAnimationActive={false}
+                        />
+                      </LineChart>
+                    ) : experimentId === "pendulum_harmonic" ? (
+                      <AreaChart data={dataPoints} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} />
+                        <XAxis dataKey="time" stroke={axisStroke} fontSize={11} tickFormatter={(v) => `${v}s`} />
+                        <YAxis stroke={axisStroke} fontSize={11} tickFormatter={(v) => `${v}J`} />
+                        <Tooltip contentStyle={tooltipStyle} />
+                        <Area
+                          type="monotone"
+                          dataKey="kineticEnergy"
+                          name="Kinetic Energy (J)"
+                          stroke={primaryStroke}
+                          fill={primaryStroke}
+                          fillOpacity={0.2}
+                          isAnimationActive={false}
+                        />
+                        <Area
+                          type="monotone"
+                          dataKey="potentialEnergy"
+                          name="Potential Energy (J)"
+                          stroke={emeraldStroke}
+                          fill={emeraldStroke}
+                          fillOpacity={0.2}
+                          isAnimationActive={false}
+                        />
+                      </AreaChart>
+                    ) : experimentId === "photosynthesis" ? (
+                      <LineChart data={dataPoints} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} />
+                        <XAxis dataKey="time" stroke={axisStroke} fontSize={11} tickFormatter={(v) => `${v}s`} />
+                        <YAxis stroke={axisStroke} fontSize={11} />
+                        <Tooltip contentStyle={tooltipStyle} />
+                        <Line
+                          type="monotone"
+                          dataKey="dissolvedOxygenMgL"
+                          name="Dissolved O₂ (mg/L)"
+                          stroke={primaryStroke}
+                          strokeWidth={2.5}
+                          dot={false}
                           isAnimationActive={false}
                         />
                       </LineChart>

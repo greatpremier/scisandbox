@@ -1,12 +1,13 @@
 import React, { useRef, useEffect } from "react";
 import * as THREE from "three";
 import { ThreeCanvasWrapper } from "./ThreeCanvasWrapper";
-import { TitrationResult, GasReactionState } from "../../utils/physicsEngine";
+import { TitrationResult, GasReactionState, SpectrophotometryState } from "../../utils/physicsEngine";
 
 interface ChemistrySimulationProps {
-  experimentId: "titration" | "reaction_kinetics";
+  experimentId: "titration" | "reaction_kinetics" | "spectrophotometry";
   titrationState?: TitrationResult;
   gasState?: GasReactionState;
+  spectroState?: SpectrophotometryState;
   isDispensing?: boolean;
   stirringSpeed?: number;
   temperature?: number;
@@ -16,6 +17,7 @@ export const ChemistrySimulation: React.FC<ChemistrySimulationProps> = ({
   experimentId,
   titrationState,
   gasState,
+  spectroState,
   isDispensing = false,
   stirringSpeed = 400,
   temperature = 25,
@@ -27,6 +29,9 @@ export const ChemistrySimulation: React.FC<ChemistrySimulationProps> = ({
   const dropsGroupRef = useRef<THREE.Group | null>(null);
   const bubblesGroupRef = useRef<THREE.Points | null>(null);
   const bubblePositionsRef = useRef<Float32Array | null>(null);
+  const cuvetteLiquidMeshRef = useRef<THREE.Mesh | null>(null);
+  const transmittedBeamRef = useRef<THREE.Mesh | null>(null);
+  const incidentBeamRef = useRef<THREE.Mesh | null>(null);
 
   // Synchronize liquid color, volume, and mechanics
   useEffect(() => {
@@ -54,6 +59,56 @@ export const ChemistrySimulation: React.FC<ChemistrySimulationProps> = ({
       syringePlungerRef.current.position.x = displacement;
     }
   }, [gasState, experimentId]);
+
+  // Synchronize Spectrophotometry cuvette solution and beam transmission
+  useEffect(() => {
+    if (experimentId === "spectrophotometry" && spectroState) {
+      if (cuvetteLiquidMeshRef.current) {
+        const mat = cuvetteLiquidMeshRef.current.material as THREE.MeshStandardMaterial;
+        mat.color.setHex(spectroState.solutionHex);
+        const alpha = Math.min(0.95, Math.max(0.2, (spectroState.absorbance / 2.5) * 0.75 + 0.2));
+        mat.opacity = alpha;
+        // Scale cuvette width along Z-axis according to path length (1.0 cm = scale 1, 2.0 cm = scale 1.8)
+        const pathScale = spectroState.pathLengthCm >= 1.9 ? 1.7 : spectroState.pathLengthCm <= 0.6 ? 0.6 : 1.0;
+        cuvetteLiquidMeshRef.current.scale.set(pathScale, 1, 1);
+      }
+
+      // Convert wavelength (380 - 750 nm) to RGB for the incident and transmitted beam
+      const wl = spectroState.wavelengthNm;
+      let r = 0, g = 0, b = 0;
+      if (wl >= 380 && wl < 440) {
+        r = -(wl - 440) / (440 - 380);
+        b = 1.0;
+      } else if (wl >= 440 && wl < 490) {
+        g = (wl - 440) / (490 - 440);
+        b = 1.0;
+      } else if (wl >= 490 && wl < 510) {
+        g = 1.0;
+        b = -(wl - 510) / (510 - 490);
+      } else if (wl >= 510 && wl < 580) {
+        r = (wl - 510) / (580 - 510);
+        g = 1.0;
+      } else if (wl >= 580 && wl < 645) {
+        r = 1.0;
+        g = -(wl - 645) / (645 - 580);
+      } else if (wl >= 645 && wl <= 750) {
+        r = 1.0;
+      }
+
+      if (incidentBeamRef.current) {
+        const mat = incidentBeamRef.current.material as THREE.MeshBasicMaterial;
+        mat.color.setRGB(r, g, b);
+      }
+
+      if (transmittedBeamRef.current) {
+        const mat = transmittedBeamRef.current.material as THREE.MeshBasicMaterial;
+        mat.color.setRGB(r, g, b);
+        // Intensity directly proportional to Beer-Lambert Transmittance %T (0.0 to 1.0)
+        const tFrac = spectroState.transmittancePct / 100;
+        mat.opacity = Math.max(0.02, Math.min(0.9, tFrac * 0.85));
+      }
+    }
+  }, [spectroState, experimentId]);
 
   const handleSceneReady = (scene: THREE.Scene) => {
     // 1. Lab Tabletop Surface
@@ -233,7 +288,7 @@ export const ChemistrySimulation: React.FC<ChemistrySimulationProps> = ({
       const dropsGroup = new THREE.Group();
       scene.add(dropsGroup);
       dropsGroupRef.current = dropsGroup;
-    } else {
+    } else if (experimentId === "reaction_kinetics") {
       // ==================== REACTION KINETICS APPARATUS ====================
       // A. Reaction Flask on heating base
       const flaskGeo = new THREE.SphereGeometry(1.2, 32, 24);
@@ -362,6 +417,162 @@ export const ChemistrySimulation: React.FC<ChemistrySimulationProps> = ({
       scene.add(bubbles);
       bubblesGroupRef.current = bubbles;
       bubblePositionsRef.current = bubblePositions;
+    } else if (experimentId === "spectrophotometry") {
+      // ==================== SPECTROPHOTOMETER BENCHTOP APPARATUS ====================
+      // 1. Spectrophotometer Main Instrument Chassis
+      const chassisGroup = new THREE.Group();
+
+      const bodyGeo = new THREE.BoxGeometry(6.8, 1.8, 4.4);
+      const bodyMat = new THREE.MeshStandardMaterial({
+        color: 0x1e293b,
+        roughness: 0.3,
+        metalness: 0.4,
+      });
+      const body = new THREE.Mesh(bodyGeo, bodyMat);
+      body.position.set(0, 0.9, 0);
+      body.castShadow = true;
+      body.receiveShadow = true;
+      chassisGroup.add(body);
+
+      // Instrument Beveled Top Faceplate
+      const faceplateGeo = new THREE.BoxGeometry(6.6, 0.1, 4.2);
+      const faceplateMat = new THREE.MeshStandardMaterial({
+        color: 0x0f172a,
+        roughness: 0.25,
+        metalness: 0.7,
+      });
+      const faceplate = new THREE.Mesh(faceplateGeo, faceplateMat);
+      faceplate.position.set(0, 1.85, 0);
+      chassisGroup.add(faceplate);
+
+      // Digital Monochromator Display Screen
+      const displayGeo = new THREE.BoxGeometry(2.4, 0.05, 1.1);
+      const displayMat = new THREE.MeshStandardMaterial({
+        color: 0x020617,
+        roughness: 0.1,
+      });
+      const display = new THREE.Mesh(displayGeo, displayMat);
+      display.position.set(-1.8, 1.91, -0.9);
+      chassisGroup.add(display);
+
+      // Illuminated Wavelength LED readout frame
+      const ledFrameGeo = new THREE.BoxGeometry(2.2, 0.03, 0.9);
+      const ledFrameMat = new THREE.MeshBasicMaterial({ color: 0x0369a1 });
+      const ledFrame = new THREE.Mesh(ledFrameGeo, ledFrameMat);
+      ledFrame.position.set(-1.8, 1.94, -0.9);
+      chassisGroup.add(ledFrame);
+
+      // Keypad buttons
+      for (let i = 0; i < 4; i++) {
+        const btnGeo = new THREE.CylinderGeometry(0.12, 0.12, 0.08, 16);
+        const btnMat = new THREE.MeshStandardMaterial({ color: i === 0 ? 0x0ea5e9 : 0x475569, metalness: 0.5 });
+        const btn = new THREE.Mesh(btnGeo, btnMat);
+        btn.position.set(-2.4 + i * 0.4, 1.93, -0.1);
+        chassisGroup.add(btn);
+      }
+
+      // 2. Open Sample Well / Cuvette Holder Compartment
+      const wellLidGeo = new THREE.BoxGeometry(2.5, 0.15, 2.4);
+      const wellLidMat = new THREE.MeshStandardMaterial({
+        color: 0x334155,
+        roughness: 0.35,
+        metalness: 0.5,
+      });
+      const wellLid = new THREE.Mesh(wellLidGeo, wellLidMat);
+      // Angled open lid
+      wellLid.rotation.x = -Math.PI / 3.5;
+      wellLid.position.set(1.5, 2.6, -1.5);
+      chassisGroup.add(wellLid);
+
+      // Interior well cavity lining
+      const cavityGeo = new THREE.BoxGeometry(2.2, 1.0, 2.0);
+      const cavityMat = new THREE.MeshStandardMaterial({ color: 0x020617, roughness: 0.9 });
+      const cavity = new THREE.Mesh(cavityGeo, cavityMat);
+      cavity.position.set(1.5, 1.45, 0.3);
+      chassisGroup.add(cavity);
+
+      // 3. Quartz Cuvette (Transparent glass container)
+      const cuvetteGroup = new THREE.Group();
+      const cuvetteOuterGeo = new THREE.BoxGeometry(0.7, 1.8, 0.7);
+      const cuvetteOuterMat = new THREE.MeshPhysicalMaterial({
+        color: 0xffffff,
+        transmission: 0.94,
+        roughness: 0.04,
+        ior: 1.54,
+        transparent: true,
+        opacity: 0.45,
+      });
+      const cuvetteOuter = new THREE.Mesh(cuvetteOuterGeo, cuvetteOuterMat);
+      cuvetteOuter.position.set(0, 0.9, 0);
+      cuvetteGroup.add(cuvetteOuter);
+
+      // Liquid solution block inside cuvette
+      const liquidGeo = new THREE.BoxGeometry(0.62, 1.5, 0.62);
+      const liquidMat = new THREE.MeshStandardMaterial({
+        color: spectroState ? spectroState.solutionHex : 0x0284c7,
+        roughness: 0.1,
+        transparent: true,
+        opacity: 0.65,
+      });
+      const cuvetteLiquid = new THREE.Mesh(liquidGeo, liquidMat);
+      cuvetteLiquid.position.set(0, 0.8, 0);
+      cuvetteGroup.add(cuvetteLiquid);
+      cuvetteLiquidMeshRef.current = cuvetteLiquid;
+
+      cuvetteGroup.position.set(1.5, 1.1, 0.3);
+      chassisGroup.add(cuvetteGroup);
+
+      // 4. Optical Path: Monochromator Slit, Laser Beam & Photodiode Detector
+      // Emitter housing
+      const emitterGeo = new THREE.CylinderGeometry(0.18, 0.18, 0.6, 16);
+      emitterGeo.rotateZ(Math.PI / 2);
+      const optMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, metalness: 0.8 });
+      const emitter = new THREE.Mesh(emitterGeo, optMat);
+      emitter.position.set(0.1, 2.0, 0.3);
+      chassisGroup.add(emitter);
+
+      // Incident Beam (from emitter to cuvette entrance: x=0.4 to x=1.15)
+      const incBeamGeo = new THREE.CylinderGeometry(0.045, 0.045, 1.05, 16);
+      incBeamGeo.rotateZ(Math.PI / 2);
+      const incBeamMat = new THREE.MeshBasicMaterial({
+        color: 0x38bdf8,
+        transparent: true,
+        opacity: 0.85,
+      });
+      const incBeam = new THREE.Mesh(incBeamGeo, incBeamMat);
+      incBeam.position.set(0.9, 2.0, 0.3);
+      chassisGroup.add(incBeam);
+      incidentBeamRef.current = incBeam;
+
+      // Transmitted Beam (from cuvette exit x=1.85 to sensor aperture x=2.8)
+      const transBeamGeo = new THREE.CylinderGeometry(0.045, 0.045, 0.9, 16);
+      transBeamGeo.rotateZ(Math.PI / 2);
+      const transBeamMat = new THREE.MeshBasicMaterial({
+        color: 0x38bdf8,
+        transparent: true,
+        opacity: 0.6,
+      });
+      const transBeam = new THREE.Mesh(transBeamGeo, transBeamMat);
+      transBeam.position.set(2.35, 2.0, 0.3);
+      chassisGroup.add(transBeam);
+      transmittedBeamRef.current = transBeam;
+
+      // Photodiode Detector receiver block
+      const sensorGeo = new THREE.BoxGeometry(0.4, 0.6, 0.6);
+      const sensorMat = new THREE.MeshStandardMaterial({ color: 0x334155, metalness: 0.7 });
+      const sensor = new THREE.Mesh(sensorGeo, sensorMat);
+      sensor.position.set(2.85, 2.0, 0.3);
+      chassisGroup.add(sensor);
+
+      // Optical sensor aperture lens
+      const lensGeo = new THREE.CylinderGeometry(0.12, 0.12, 0.05, 16);
+      lensGeo.rotateZ(Math.PI / 2);
+      const lensMat = new THREE.MeshBasicMaterial({ color: 0x38bdf8 });
+      const lens = new THREE.Mesh(lensGeo, lensMat);
+      lens.position.set(2.65, 2.0, 0.3);
+      chassisGroup.add(lens);
+
+      scene.add(chassisGroup);
     }
 
     // Animation hook inside render loop
@@ -433,8 +644,20 @@ export const ChemistrySimulation: React.FC<ChemistrySimulationProps> = ({
     <div className="relative w-full h-full">
       <ThreeCanvasWrapper
         onSceneReady={handleSceneReady}
-        cameraPosition={experimentId === "titration" ? [0, 4.5, 7.5] : [0, 4.0, 8.5]}
-        cameraTarget={experimentId === "titration" ? [0, 2.5, 0] : [0, 1.8, 0]}
+        cameraPosition={
+          experimentId === "titration"
+            ? [0, 4.5, 7.5]
+            : experimentId === "spectrophotometry"
+            ? [0.5, 3.8, 6.5]
+            : [0, 4.0, 8.5]
+        }
+        cameraTarget={
+          experimentId === "titration"
+            ? [0, 2.5, 0]
+            : experimentId === "spectrophotometry"
+            ? [0.5, 1.6, 0]
+            : [0, 1.8, 0]
+        }
       />
 
       {/* Floating Real-time HUD Badges on 3D viewport */}
@@ -487,6 +710,36 @@ export const ChemistrySimulation: React.FC<ChemistrySimulationProps> = ({
             <div>
               <span className="text-slate-400 block text-[10px] uppercase tracking-wider">Syringe Progress</span>
               <span className="text-white font-semibold">{gasState.reactionProgressPct.toFixed(0)}%</span>
+            </div>
+          </div>
+        )}
+
+        {experimentId === "spectrophotometry" && spectroState && (
+          <div className="bg-slate-900/85 backdrop-blur-md border border-slate-700/80 px-3 py-2 rounded-lg shadow-xl font-mono text-xs flex items-center gap-3">
+            <div>
+              <span className="text-slate-400 block text-[10px] uppercase tracking-wider">Absorbance (A)</span>
+              <span
+                className={`text-lg font-bold ${
+                  spectroState.isSaturated ? "text-rose-400 animate-pulse" : "text-cyan-400"
+                }`}
+              >
+                {spectroState.isSaturated ? ">3.200 (SAT)" : spectroState.absorbance.toFixed(3)}
+              </span>
+            </div>
+            <div className="w-[1px] h-7 bg-slate-700" />
+            <div>
+              <span className="text-slate-400 block text-[10px] uppercase tracking-wider">Transmittance</span>
+              <span className="text-amber-400 font-semibold">{spectroState.transmittancePct.toFixed(1)}%</span>
+            </div>
+            <div className="w-[1px] h-7 bg-slate-700" />
+            <div>
+              <span className="text-slate-400 block text-[10px] uppercase tracking-wider">Wavelength</span>
+              <span className="text-white font-semibold">{spectroState.wavelengthNm} nm</span>
+            </div>
+            <div className="w-[1px] h-7 bg-slate-700" />
+            <div>
+              <span className="text-slate-400 block text-[10px] uppercase tracking-wider">Molar Absorptivity</span>
+              <span className="text-emerald-400 font-semibold">{spectroState.molarAbsorptivity} L/mol·cm</span>
             </div>
           </div>
         )}

@@ -1,10 +1,10 @@
 import React, { useRef, useEffect } from "react";
 import * as THREE from "three";
 import { ThreeCanvasWrapper } from "./ThreeCanvasWrapper";
-import { ProjectileState, RayPath } from "../../utils/physicsEngine";
+import { ProjectileState, RayPath, PendulumState } from "../../utils/physicsEngine";
 
 interface PhysicsSimulationProps {
-  experimentId: "projectile" | "optics_prism";
+  experimentId: "projectile" | "optics_prism" | "pendulum_harmonic";
   projectileState?: ProjectileState;
   pastTrajectory?: { x: number; y: number; z: number }[];
   launchAngle?: number;
@@ -12,6 +12,7 @@ interface PhysicsSimulationProps {
   prismRayPaths?: RayPath[];
   lightMode?: "white" | "monochromatic";
   incidentAngle?: number;
+  pendulumState?: PendulumState;
 }
 
 export const PhysicsSimulation: React.FC<PhysicsSimulationProps> = ({
@@ -23,6 +24,7 @@ export const PhysicsSimulation: React.FC<PhysicsSimulationProps> = ({
   prismRayPaths = [],
   lightMode = "white",
   incidentAngle = 45,
+  pendulumState,
 }) => {
   const cannonBarrelRef = useRef<THREE.Group | null>(null);
   const cannonballMeshRef = useRef<THREE.Mesh | null>(null);
@@ -31,6 +33,11 @@ export const PhysicsSimulation: React.FC<PhysicsSimulationProps> = ({
   const targetMeshRef = useRef<THREE.Group | null>(null);
   const prismMeshRef = useRef<THREE.Mesh | null>(null);
   const rayLinesGroupRef = useRef<THREE.Group | null>(null);
+
+  // Pendulum Refs
+  const pendulumBobMeshRef = useRef<THREE.Mesh | null>(null);
+  const pendulumStringLineRef = useRef<THREE.Line | null>(null);
+  const pendulumArrowRef = useRef<THREE.ArrowHelper | null>(null);
 
   // Update cannon angle and target distance
   useEffect(() => {
@@ -48,6 +55,47 @@ export const PhysicsSimulation: React.FC<PhysicsSimulationProps> = ({
       targetMeshRef.current.position.x = targetDistance * scale;
     }
   }, [targetDistance]);
+
+  // Update pendulum bob position, string line, and velocity vector
+  useEffect(() => {
+    if (experimentId === "pendulum_harmonic" && pendulumState) {
+      const pivotY = 3.2;
+      // Scale length from meters to 3D units (e.g. 1m = 1.8 units)
+      const scale = 1.8;
+      const bobX = pendulumState.length * scale * Math.sin(pendulumState.angleRad);
+      const bobY = pivotY - pendulumState.length * scale * Math.cos(pendulumState.angleRad);
+
+      if (pendulumBobMeshRef.current) {
+        pendulumBobMeshRef.current.position.set(bobX, bobY, 0);
+        // Scale bob radius with mass (0.1 kg to 5.0 kg maps to radius 0.15 to 0.35)
+        const bobScale = Math.max(0.6, Math.min(1.6, 0.7 + (pendulumState.mass / 5.0) * 0.7));
+        pendulumBobMeshRef.current.scale.set(bobScale, bobScale, bobScale);
+      }
+
+      if (pendulumStringLineRef.current) {
+        const positions = new Float32Array([0, pivotY, 0, bobX, bobY, 0]);
+        pendulumStringLineRef.current.geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+        pendulumStringLineRef.current.geometry.attributes.position.needsUpdate = true;
+      }
+
+      if (pendulumArrowRef.current) {
+        const speed = Math.abs(pendulumState.angularVelocity);
+        if (speed > 0.05) {
+          const dir = new THREE.Vector3(
+            Math.cos(pendulumState.angleRad) * Math.sign(pendulumState.angularVelocity),
+            Math.sin(pendulumState.angleRad) * Math.sign(pendulumState.angularVelocity),
+            0
+          ).normalize();
+          pendulumArrowRef.current.position.set(bobX, bobY, 0);
+          pendulumArrowRef.current.setDirection(dir);
+          pendulumArrowRef.current.setLength(Math.min(1.2, speed * 0.3), 0.12, 0.08);
+          pendulumArrowRef.current.visible = true;
+        } else {
+          pendulumArrowRef.current.visible = false;
+        }
+      }
+    }
+  }, [pendulumState, experimentId]);
 
   // Update projectile position, velocity arrow, and trail
   useEffect(() => {
@@ -248,7 +296,7 @@ export const PhysicsSimulation: React.FC<PhysicsSimulationProps> = ({
       });
       scene.add(targetGroup);
       targetMeshRef.current = targetGroup;
-    } else {
+    } else if (experimentId === "optics_prism") {
       // ==================== 3D WAVE OPTICS & PRISM ====================
       // A. Optical Bench Rails
       const railGeo = new THREE.BoxGeometry(11, 0.25, 3);
@@ -336,6 +384,101 @@ export const PhysicsSimulation: React.FC<PhysicsSimulationProps> = ({
       const rayLinesGroup = new THREE.Group();
       scene.add(rayLinesGroup);
       rayLinesGroupRef.current = rayLinesGroup;
+    } else if (experimentId === "pendulum_harmonic") {
+      // ==================== HARMONIC PENDULUM 3D APPARATUS ====================
+      const standGroup = new THREE.Group();
+
+      // Heavy Cast-Iron Base Plate
+      const baseGeo = new THREE.BoxGeometry(2.2, 0.25, 2.2);
+      const baseMat = new THREE.MeshStandardMaterial({
+        color: 0x1e293b,
+        metalness: 0.8,
+        roughness: 0.35,
+      });
+      const baseMesh = new THREE.Mesh(baseGeo, baseMat);
+      baseMesh.position.set(-1.4, 0.125, 0);
+      baseMesh.castShadow = true;
+      baseMesh.receiveShadow = true;
+      standGroup.add(baseMesh);
+
+      // Vertical Chrome Support Mast
+      const mastGeo = new THREE.CylinderGeometry(0.08, 0.08, 3.6, 24);
+      const chromeMat = new THREE.MeshStandardMaterial({
+        color: 0xe2e8f0,
+        metalness: 0.95,
+        roughness: 0.1,
+      });
+      const mast = new THREE.Mesh(mastGeo, chromeMat);
+      mast.position.set(-1.4, 1.8, 0);
+      mast.castShadow = true;
+      standGroup.add(mast);
+
+      // Horizontal Arm
+      const armGeo = new THREE.CylinderGeometry(0.06, 0.06, 1.6, 24);
+      armGeo.rotateZ(Math.PI / 2);
+      const arm = new THREE.Mesh(armGeo, chromeMat);
+      arm.position.set(-0.65, 3.2, 0);
+      arm.castShadow = true;
+      standGroup.add(arm);
+
+      // Pivot Bearing Clamp
+      const pivotGeo = new THREE.CylinderGeometry(0.16, 0.16, 0.25, 24);
+      pivotGeo.rotateX(Math.PI / 2);
+      const pivotMat = new THREE.MeshStandardMaterial({
+        color: 0x0284c7,
+        metalness: 0.7,
+        roughness: 0.2,
+      });
+      const pivot = new THREE.Mesh(pivotGeo, pivotMat);
+      pivot.position.set(0, 3.2, 0);
+      standGroup.add(pivot);
+
+      // Protractor Arc Gauge (-90 to +90 deg)
+      const protractorGeo = new THREE.RingGeometry(0.5, 0.95, 32, 1, Math.PI, Math.PI);
+      const protractorMat = new THREE.MeshBasicMaterial({
+        color: 0x0284c7,
+        side: THREE.DoubleSide,
+        transparent: true,
+        opacity: 0.45,
+      });
+      const protractor = new THREE.Mesh(protractorGeo, protractorMat);
+      protractor.position.set(0, 3.2, -0.05);
+      standGroup.add(protractor);
+
+      // Degree Graduation Ring Marker at 0 deg (vertical plumb line)
+      const plumbGeo = new THREE.CylinderGeometry(0.015, 0.015, 0.5, 8);
+      const plumb = new THREE.Mesh(plumbGeo, new THREE.MeshBasicMaterial({ color: 0x38bdf8 }));
+      plumb.position.set(0, 2.75, -0.04);
+      standGroup.add(plumb);
+
+      scene.add(standGroup);
+
+      // Suspension String Line
+      const stringGeo = new THREE.BufferGeometry();
+      const stringPositions = new Float32Array([0, 3.2, 0, 0, 1.4, 0]);
+      stringGeo.setAttribute("position", new THREE.BufferAttribute(stringPositions, 3));
+      const stringMat = new THREE.LineBasicMaterial({ color: 0xf8fafc, linewidth: 2 });
+      const stringLine = new THREE.Line(stringGeo, stringMat);
+      scene.add(stringLine);
+      pendulumStringLineRef.current = stringLine;
+
+      // Precision Metallic Spherical Bob
+      const bobGeo = new THREE.SphereGeometry(0.24, 32, 32);
+      const bobMat = new THREE.MeshStandardMaterial({
+        color: 0xf59e0b, // Polished brass / gold
+        metalness: 0.9,
+        roughness: 0.15,
+      });
+      const bobMesh = new THREE.Mesh(bobGeo, bobMat);
+      bobMesh.position.set(0, 1.4, 0);
+      bobMesh.castShadow = true;
+      scene.add(bobMesh);
+      pendulumBobMeshRef.current = bobMesh;
+
+      // Tangential Velocity Arrow Helper
+      const arrow = new THREE.ArrowHelper(new THREE.Vector3(1, 0, 0), new THREE.Vector3(0, 1.4, 0), 0.6, 0x10b981);
+      scene.add(arrow);
+      pendulumArrowRef.current = arrow;
     }
 
     return () => {};
@@ -345,8 +488,20 @@ export const PhysicsSimulation: React.FC<PhysicsSimulationProps> = ({
     <div className="relative w-full h-full">
       <ThreeCanvasWrapper
         onSceneReady={handleSceneReady}
-        cameraPosition={experimentId === "projectile" ? [12, 9, 22] : [0, 4.5, 8.5]}
-        cameraTarget={experimentId === "projectile" ? [14, 2, 0] : [0, 1.2, 0]}
+        cameraPosition={
+          experimentId === "projectile"
+            ? [12, 9, 22]
+            : experimentId === "pendulum_harmonic"
+            ? [0, 2.8, 6.8]
+            : [0, 4.5, 8.5]
+        }
+        cameraTarget={
+          experimentId === "projectile"
+            ? [14, 2, 0]
+            : experimentId === "pendulum_harmonic"
+            ? [0, 2.0, 0]
+            : [0, 1.2, 0]
+        }
       />
 
       {/* Real-Time Physics Telemetry HUD */}
@@ -390,6 +545,30 @@ export const PhysicsSimulation: React.FC<PhysicsSimulationProps> = ({
               <span className="text-amber-400 font-semibold">
                 {lightMode === "white" ? "Polychromatic Fan (7 Wavelengths)" : "Monochromatic Laser"}
               </span>
+            </div>
+          </div>
+        )}
+
+        {experimentId === "pendulum_harmonic" && pendulumState && (
+          <div className="bg-slate-900/85 backdrop-blur-md border border-slate-700/80 px-3 py-2 rounded-lg shadow-xl font-mono text-xs flex items-center gap-3">
+            <div>
+              <span className="text-slate-400 block text-[10px] uppercase tracking-wider">Angle (θ)</span>
+              <span className="text-amber-400 text-lg font-bold">{pendulumState.angleDeg.toFixed(1)}°</span>
+            </div>
+            <div className="w-[1px] h-7 bg-slate-700" />
+            <div>
+              <span className="text-slate-400 block text-[10px] uppercase tracking-wider">Angular Velocity</span>
+              <span className="text-cyan-400 font-semibold">{pendulumState.angularVelocity.toFixed(2)} rad/s</span>
+            </div>
+            <div className="w-[1px] h-7 bg-slate-700" />
+            <div>
+              <span className="text-slate-400 block text-[10px] uppercase tracking-wider">Theoretical Period</span>
+              <span className="text-emerald-400 font-semibold">{pendulumState.theoreticalPeriod.toFixed(2)} s</span>
+            </div>
+            <div className="w-[1px] h-7 bg-slate-700" />
+            <div>
+              <span className="text-slate-400 block text-[10px] uppercase tracking-wider">Total Energy</span>
+              <span className="text-white font-semibold">{pendulumState.totalEnergy.toFixed(2)} J</span>
             </div>
           </div>
         )}

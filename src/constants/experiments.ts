@@ -399,5 +399,242 @@ export const EXPERIMENTS_LIST: ExperimentMeta[] = [
         }
       }
     ]
+  },
+  {
+    id: "spectrophotometry",
+    title: "Spectrophotometry & Beer-Lambert Law",
+    subtitle: "Molar Absorptivity (A = ε·b·c), Transmittance & Calibration Curves",
+    discipline: "chemistry",
+    iconName: "Binary",
+    description: "Analyze light attenuation through chromophore solutions in standard quartz cuvettes across the UV-visible electromagnetic spectrum. Measure absorbance vs transmittance, establish linear calibration curves, and verify the physical limits of the Beer-Lambert law.",
+    apparatus: [
+      "Dual-Beam UV-Vis Benchtop Spectrophotometer",
+      "Precision 1.0 cm Quartz Spectrophotometric Cuvette",
+      "Monochromator & Diffraction Grating Assembly (380 - 750 nm)",
+      "High-Sensitivity Solid-State Silicon Photodiode Sensor",
+      "Digital Microprocessor Display & Blanking Calibration Module"
+    ],
+    equations: [
+      {
+        name: "Beer-Lambert Law",
+        latex: "A = -\\log_{10}(T) = \\varepsilon \\cdot b \\cdot c",
+        description: "Absorbance equals the product of molar absorptivity, path length, and molar concentration."
+      },
+      {
+        name: "Transmittance Relationship",
+        latex: "%T = 100 \\times 10^{-A} = 100 \\times \\frac{I}{I_0}",
+        description: "Percentage of transmitted light reaching the photodiode relative to incident intensity."
+      },
+      {
+        name: "Molar Absorptivity Gaussian Dispersion",
+        latex: "\\varepsilon(\\lambda) = \\varepsilon_{max} \\exp\\left(-\\frac{(\\lambda - \\lambda_{max})^2}{2\\sigma^2}\\right)",
+        description: "Wavelength-dependent electronic transition cross-section of the absorbing solute."
+      }
+    ],
+    objectives: [
+      "Determine the absorption spectrum and maximum wavelength (λmax) for standard solutions",
+      "Construct a linear Beer-Lambert calibration plot (A vs. concentration) and determine molar absorptivity ε",
+      "Observe optical saturation when absorbance exceeds the detector linear dynamic range (A > 3.0)"
+    ],
+    principles: [
+      "Electronic transitions: d-orbital and conjugated pi-electron excitations absorb specific photon energies",
+      "Linearity regime: deviations occur at high concentration (>0.1 M) due to electrostatic inter-ionic shielding",
+      "Transmittance percentage relates exponentially to solute concentration and cuvette thickness"
+    ],
+    presets: [
+      {
+        id: "cuso4_standard",
+        name: "Copper(II) Sulfate (CuSO₄) at λmax = 635 nm",
+        description: "Hydrated cupric ions exhibit strong red absorption giving the solution its vivid blue tint.",
+        parameters: {
+          solute: "CuSO4",
+          concentration: 0.25, // M
+          pathLength: 1.0, // cm
+          wavelength: 635, // nm
+          scanMode: "single"
+        }
+      },
+      {
+        id: "kmno4_high_eps",
+        name: "Potassium Permanganate (KMnO₄) at λmax = 525 nm",
+        description: "Intense ligand-to-metal charge transfer produces huge molar absorptivity (ε ≈ 2400 L/mol·cm).",
+        parameters: {
+          solute: "KMnO4",
+          concentration: 0.001, // M (1 mM)
+          pathLength: 1.0,
+          wavelength: 525,
+          scanMode: "single"
+        }
+      },
+      {
+        id: "path_length_double",
+        name: "Extended 2.0 cm Path Length Verification",
+        description: "Double optical path length to directly observe doubling of absorbance at constant concentration.",
+        parameters: {
+          solute: "CuSO4",
+          concentration: 0.15,
+          pathLength: 2.0,
+          wavelength: 635,
+          scanMode: "single"
+        }
+      }
+    ]
+  },
+  {
+    id: "pendulum_harmonic",
+    title: "Harmonic Pendulum & Phase Space Dynamics",
+    subtitle: "Nonlinear Oscillations, Air Damping, Gravitational Field & Resonance",
+    discipline: "physics",
+    iconName: "Activity",
+    description: "Investigate simple and nonlinear pendulum mechanics under variable gravitational fields, viscous air resistance damping, and large amplitude angles. Trace real-time phase portraits (θ vs ω) and analyze mechanical energy conservation.",
+    apparatus: [
+      "Rigid Steel Laboratory Suspension Frame & Low-Friction Pivot Clamp",
+      "High-Tensile Inelastic Braided Suspension Cable (0.2 – 2.5 m)",
+      "Polished Precision Metallic Bob (0.1 – 5.0 kg)",
+      "High-Resolution Optical Angle Sensor & Protractor Gauge (±0.1°)",
+      "Viscous Air Aerodynamic Drag & Variable Celestial Gravity Module"
+    ],
+    equations: [
+      {
+        name: "Nonlinear Equation of Motion",
+        latex: "\\frac{d^2\\theta}{dt^2} + \\gamma \\frac{d\\theta}{dt} + \\frac{g}{L} \\sin(\\theta) = 0",
+        description: "Second-order nonlinear differential equation governing damped pendulum oscillations."
+      },
+      {
+        name: "Large-Angle Period Correction",
+        latex: "T \\approx 2\\pi \\sqrt{\\frac{L}{g}} \\left(1 + \\frac{1}{16}\\theta_0^2 + \\frac{11}{3072}\\theta_0^4\\right)",
+        description: "First-order Borda expansion for finite angular amplitudes beyond the small-angle approximation."
+      },
+      {
+        name: "Mechanical Energy Conservation",
+        latex: "E_{tot} = \\frac{1}{2}m(L\\omega)^2 + mgL(1 - \\cos\\theta)",
+        description: "Sum of instantaneous rotational kinetic energy and gravitational potential energy."
+      }
+    ],
+    objectives: [
+      "Verify the relationship between string length L and period T (T ∝ √L)",
+      "Demonstrate period dilation and departure from simple harmonic motion at large initial angles (θ > 45°)",
+      "Quantify mechanical energy decay under viscous aerodynamic damping in phase space (θ vs ω)"
+    ],
+    principles: [
+      "Small-angle approximation: for sin(θ) ≈ θ, motion is strictly simple harmonic (SHM)",
+      "Gravitational invariance: period is independent of bob mass m in the absence of air drag",
+      "Phase portrait: closed concentric orbits for undamped motion; spiral sinks toward origin for damped decay"
+    ],
+    presets: [
+      {
+        id: "earth_ideal_shm",
+        name: "Earth Standard SHM (L=1.0m, θ=25°, No Drag)",
+        description: "Classic classroom pendulum with exactly 2.006 s period on Earth (g = 9.81 m/s²).",
+        parameters: {
+          stringLength: 1.0, // m
+          bobMass: 1.0, // kg
+          initialAngle: 25, // deg
+          damping: 0.0, // s^-1
+          gravity: 9.81 // m/s^2
+        }
+      },
+      {
+        id: "large_angle_nonlinear",
+        name: "Extreme Large-Angle Oscillation (θ = 75°)",
+        description: "Reveals nonlinear period lengthening where simple harmonic approximation fails.",
+        parameters: {
+          stringLength: 1.2,
+          bobMass: 1.5,
+          initialAngle: 75,
+          damping: 0.02,
+          gravity: 9.81
+        }
+      },
+      {
+        id: "lunar_gravity",
+        name: "Lunar Low-Gravity Orbit (Moon g = 1.62 m/s²)",
+        description: "Slow-motion swinging with dramatically extended period in the Moon's gravitational field.",
+        parameters: {
+          stringLength: 1.0,
+          bobMass: 1.0,
+          initialAngle: 30,
+          damping: 0.0,
+          gravity: 1.62
+        }
+      }
+    ]
+  },
+  {
+    id: "photosynthesis",
+    title: "Photosynthesis & Cellular Respiration Kinetics",
+    subtitle: "Light Intensity, Carbon Dioxide Saturation & Dissolved Oxygen Evolution",
+    discipline: "biology",
+    iconName: "Leaf",
+    description: "Measure real-time oxygen evolution and metabolic gas exchange in submerged aquatic plants (Elodea canadensis). Investigate the chlorophyll action spectrum across colored light filters, carbon dioxide saturation kinetics with sodium bicarbonate, and determine the light compensation point.",
+    apparatus: [
+      "Sealed Borosilicate Aquatic Respirometer Reaction Chamber",
+      "Submerged Elodea canadensis Sprig with Micro-Bubble Counting Funnel",
+      "Full-Spectrum Tunable Laboratory Luminaire with Optical Bandpass Filters (450nm Blue, 520nm Green, 660nm Red)",
+      "Digital Electrochemical Dissolved Oxygen (DO) Sensor Probe (mg/L)",
+      "Thermostatically Regulated Water Bath with Micro-Stirrer"
+    ],
+    equations: [
+      {
+        name: "Photosynthetic Reaction",
+        latex: "6\\text{CO}_2 + 6\\text{H}_2\\text{O} + h\\nu \\longrightarrow \\text{C}_6\\text{H}_{12}\\text{O}_6 + 6\\text{O}_2 \\uparrow",
+        description: "Light-driven reduction of carbon dioxide into carbohydrates and gaseous oxygen."
+      },
+      {
+        name: "Net Photosynthetic Oxygen Evolution",
+        latex: "P_{net} = P_{max} \\cdot \\frac{I \\cdot \\eta_{spec}}{I \\cdot \\eta_{spec} + K_I} \\cdot \\frac{[\\text{CO}_2]}{[\\text{CO}_2] + K_c} - R_{resp}(T)",
+        description: "Net oxygen rate balancing photochemical photon capture against dark cellular respiration."
+      },
+      {
+        name: "Light Compensation Point",
+        latex: "P_{gross}(I_c) = R_{resp} \\implies P_{net} = 0",
+        description: "Irradiance threshold where photosynthetic O2 production precisely balances respiratory consumption."
+      }
+    ],
+    objectives: [
+      "Demonstrate the photosynthetic action spectrum by comparing oxygen output under Blue, Red, and Green light",
+      "Determine the light saturation threshold (Pmax) and the light compensation point (LCP)",
+      "Analyze the role of inorganic carbon supply ([NaHCO3]) as a limiting factor"
+    ],
+    principles: [
+      "Chlorophyll absorption peaks in blue (430–450 nm) and red (640–660 nm), reflecting green light",
+      "Dark respiration continues unabated in plant cells, consuming oxygen and glucose to synthesize ATP",
+      "Photosynthetic rate is constrained by Liebig's Law of the Minimum (light, CO2, or enzymatic temperature)"
+    ],
+    presets: [
+      {
+        id: "full_sunlight_optimal",
+        name: "Optimal Sunlight & High Bicarbonate (I = 1200 μmol, 25°C)",
+        description: "Maximum oxygen bubble production and rapid dissolved oxygen rise under saturating white light.",
+        parameters: {
+          lightIntensity: 1200,
+          lightColor: "white",
+          bicarbonateConc: 25, // mM
+          temperature: 25
+        }
+      },
+      {
+        id: "action_spectrum_green",
+        name: "Chlorophyll 'Green Window' Minimal Absorption Test",
+        description: "Green light (520 nm) produces minimal photosynthesis because chlorophyll reflects green wavelengths.",
+        parameters: {
+          lightIntensity: 1000,
+          lightColor: "green",
+          bicarbonateConc: 20,
+          temperature: 25
+        }
+      },
+      {
+        id: "dark_respiration_lcp",
+        name: "Dark Respiration & Compensation Point (Low Light)",
+        description: "Demonstrates negative net O2 evolution in dark or near-dark as cellular respiration dominates.",
+        parameters: {
+          lightIntensity: 35,
+          lightColor: "white",
+          bicarbonateConc: 15,
+          temperature: 25
+        }
+      }
+    ]
   }
 ];
